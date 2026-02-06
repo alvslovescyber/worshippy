@@ -8,6 +8,15 @@ const schema = z.object({
   query: z.string().min(1).max(200),
 });
 
+function shouldAutoSelect(candidates: { score: number }[]): boolean {
+  if (candidates.length === 1) return true;
+  if (candidates.length === 0) return false;
+  const top = candidates[0];
+  const second = candidates[1];
+  if (!top || !second) return true;
+  return top.score >= 0.95 && top.score - second.score >= 0.2;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -20,7 +29,7 @@ export async function POST(request: Request) {
     const candidates = await provider.searchSongs(parsed.data.query);
 
     let topMatch: NormalizedSong | null = null;
-    if (candidates.length > 0) {
+    if (shouldAutoSelect(candidates)) {
       const raw = await provider.getLyrics(candidates[0].id);
       topMatch = normalizeLyrics(raw);
     }

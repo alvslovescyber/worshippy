@@ -9,11 +9,35 @@ function formatDate(): string {
 }
 
 function chunkLines(lines: string[], max: number): string[][] {
+  if (lines.length <= max) return [lines];
+
   const chunks: string[][] = [];
-  for (let i = 0; i < lines.length; i += max) {
-    chunks.push(lines.slice(i, i + max));
+  for (let i = 0; i < lines.length; i += max) chunks.push(lines.slice(i, i + max));
+
+  if (max >= 3 && chunks.length >= 2) {
+    const last = chunks[chunks.length - 1]!;
+    const prev = chunks[chunks.length - 2]!;
+    if (last.length === 1 && prev.length > 2) {
+      last.unshift(prev.pop()!);
+    }
   }
-  return chunks;
+
+  return chunks.filter((c) => c.length > 0);
+}
+
+function splitByBlankLines(lines: string[]): string[][] {
+  const groups: string[][] = [];
+  let buf: string[] = [];
+  for (const line of lines) {
+    if (line.trim() === "") {
+      if (buf.length > 0) groups.push(buf);
+      buf = [];
+      continue;
+    }
+    buf.push(line);
+  }
+  if (buf.length > 0) groups.push(buf);
+  return groups;
 }
 
 export function splitIntoSlides(
@@ -28,16 +52,16 @@ export function splitIntoSlides(
     slides.push({ type: "title", title: song.title, artist: song.artist });
 
     for (const section of song.sections) {
-      // Filter out blank lines for slide content
-      const nonBlank = section.lines.filter((l) => l.trim() !== "");
-      const chunks = chunkLines(nonBlank, settings.linesPerSlide);
+      const cleaned = section.lines.map((l) => l.trim());
+      const groups = splitByBlankLines(cleaned);
 
-      for (const chunk of chunks) {
-        const slide: SlideContent = { type: "lyrics", lines: chunk };
-        if (settings.showSectionLabels) {
-          slide.sectionLabel = section.label;
+      for (const group of groups) {
+        const chunks = chunkLines(group, settings.linesPerSlide);
+        for (const chunk of chunks) {
+          const slide: SlideContent = { type: "lyrics", lines: chunk };
+          if (settings.showSectionLabels) slide.sectionLabel = section.label;
+          slides.push(slide);
         }
-        slides.push(slide);
       }
     }
   }

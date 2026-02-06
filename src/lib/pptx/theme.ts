@@ -13,26 +13,26 @@ export interface PptxTheme {
 }
 
 export const darkTheme: PptxTheme = {
-  bgColor: "1a1a2e",
-  bgGradient: { color1: "1a1a2e", color2: "16213e" },
+  bgColor: "0A0A0F",
+  bgGradient: { color1: "0A0A0F", color2: "111827" },
   textColor: "FFFFFF",
   subtitleColor: "A0A0B8",
   accentColor: "F97316",
-  fontFace: "Arial",
+  fontFace: "Calibri",
   titleFontSize: 44,
   lyricsFontSize: 36,
   subtitleFontSize: 20,
   overlayColor: "000000",
-  overlayOpacity: 0.45,
+  overlayOpacity: 0.38,
 };
 
 export const lightTheme: PptxTheme = {
-  bgColor: "F8F9FA",
-  bgGradient: { color1: "FFFFFF", color2: "E8E8F0" },
+  bgColor: "F8FAFC",
+  bgGradient: { color1: "FFFFFF", color2: "EEF2FF" },
   textColor: "1A1A2E",
   subtitleColor: "6B7280",
   accentColor: "F97316",
-  fontFace: "Arial",
+  fontFace: "Calibri",
   titleFontSize: 44,
   lyricsFontSize: 36,
   subtitleFontSize: 20,

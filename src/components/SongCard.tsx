@@ -10,7 +10,7 @@ import {
   faPaste,
   faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
-import type { SongEntry, Candidate, NormalizedSong } from "@/lib/types";
+import type { SongEntry, Candidate } from "@/lib/types";
 import { useState } from "react";
 
 interface SongCardProps {
@@ -27,7 +27,7 @@ export function SongCard({
   const { query, status } = entry;
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(true);
 
   return (
     <motion.div
@@ -47,7 +47,7 @@ export function SongCard({
           <StatusLabel status={status} />
 
           {/* Candidates dropdown */}
-          {status.phase === "candidates" && status.candidates.length > 1 && (
+          {status.phase === "candidates" && status.candidates.length > 0 && (
             <div className="mt-3">
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
@@ -57,25 +57,33 @@ export function SongCard({
                   icon={faChevronDown}
                   className={`w-2.5 h-2.5 transition-transform ${showDropdown ? "rotate-180" : ""}`}
                 />
-                {status.candidates.length} matches found
+                Choose a match{" "}
+                <span className="text-white/30">
+                  ({status.candidates.length})
+                </span>
               </button>
               {showDropdown && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
-                  className="mt-2 space-y-1 overflow-hidden"
+                  className="mt-2 space-y-1.5 overflow-hidden"
                 >
                   {status.candidates.map((c: Candidate) => (
                     <button
                       key={c.id}
                       onClick={() => onSelectCandidate(c.id)}
-                      className="w-full text-left px-3 py-2 rounded-lg text-xs hover:bg-white/8 transition-colors flex items-center justify-between cursor-pointer"
+                      className="w-full text-left px-3 py-2 rounded-xl text-xs hover:bg-white/8 transition-colors flex items-center justify-between cursor-pointer border border-white/8 bg-white/[0.02]"
                     >
                       <span className="text-white/80">
                         {c.title}
                         {c.artist && (
                           <span className="text-white/40 ml-1.5">
                             {c.artist}
+                          </span>
+                        )}
+                        {c.score >= 0.95 && (
+                          <span className="ml-2 text-[10px] font-semibold text-orange-300/80 border border-orange-500/20 bg-orange-500/10 px-1.5 py-0.5 rounded-full">
+                            Recommended
                           </span>
                         )}
                       </span>
@@ -90,7 +98,9 @@ export function SongCard({
           )}
 
           {/* Error / Manual paste */}
-          {(status.phase === "error" || status.phase === "manual") && (
+          {(status.phase === "error" ||
+            status.phase === "manual" ||
+            status.phase === "candidates") && (
             <div className="mt-3">
               {!showPaste ? (
                 <button
@@ -217,6 +227,13 @@ function StatusLabel({ status }: { status: SongEntry["status"] }) {
 function StatusBadge({ status }: { status: SongEntry["status"] }) {
   if (status.phase === "searching") {
     return <div className="w-16 h-5 rounded-full shimmer" />;
+  }
+  if (status.phase === "candidates") {
+    return (
+      <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/20">
+        Choose
+      </span>
+    );
   }
   if (status.phase === "resolved") {
     return (

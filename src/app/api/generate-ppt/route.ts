@@ -37,8 +37,9 @@ export async function POST(request: Request) {
 
     const slides = splitIntoSlides(songs, settings);
     const buffer = await buildPptx(slides, settings);
+    const fileBody = new Uint8Array(buffer);
 
-    return new NextResponse(buffer, {
+    return new NextResponse(fileBody, {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.presentationml.presentation",

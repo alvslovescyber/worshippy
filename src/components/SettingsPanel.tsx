@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark, faImage } from "@fortawesome/free-solid-svg-icons";
 import type { GenerateSettings } from "@/lib/types";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -20,6 +20,7 @@ export function SettingsPanel({
   onSettingsChange,
 }: SettingsPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
 
   const update = (partial: Partial<GenerateSettings>) =>
     onSettingsChange({ ...settings, ...partial });
@@ -27,6 +28,12 @@ export function SettingsPanel({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setImageError(null);
+    if (file.size > 3 * 1024 * 1024) {
+      setImageError("Please choose an image under 3MB.");
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       update({ backgroundImage: reader.result as string });
@@ -144,7 +151,7 @@ export function SettingsPanel({
             {/* Background image */}
             <div className="mb-6">
               <label className="text-xs font-medium text-white/50 mb-2.5 block">
-                Background image
+                Background image <span className="text-white/30">(lyrics slides)</span>
               </label>
               <input
                 ref={fileInputRef}
@@ -162,7 +169,10 @@ export function SettingsPanel({
                     className="w-full h-24 object-cover rounded-lg"
                   />
                   <button
-                    onClick={() => update({ backgroundImage: undefined })}
+                    onClick={() => {
+                      setImageError(null);
+                      update({ backgroundImage: undefined });
+                    }}
                     className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white/80 hover:bg-black/80 transition-colors cursor-pointer"
                   >
                     <FontAwesomeIcon icon={faXmark} className="w-3 h-3" />
@@ -176,6 +186,9 @@ export function SettingsPanel({
                   <FontAwesomeIcon icon={faImage} className="w-3.5 h-3.5" />
                   Upload image
                 </button>
+              )}
+              {imageError && (
+                <p className="text-[11px] text-red-400/80 mt-2">{imageError}</p>
               )}
             </div>
           </motion.div>

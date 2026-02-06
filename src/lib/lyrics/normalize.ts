@@ -1,22 +1,43 @@
-import type { RawLyrics, NormalizedSong, SongSection } from "@/lib/types";
+import type {
+  RawLyrics,
+  NormalizedSong,
+  SongSection,
+  SongSectionLabel,
+} from "@/lib/types";
 
-const KNOWN_LABELS: Record<string, SongSection["label"]> = {
-  "verse 1": "Verse 1",
-  "verse 2": "Verse 2",
-  "verse 3": "Verse 3",
-  "verse 4": "Verse 4",
+const KNOWN_LABELS: Record<string, SongSectionLabel> = {
   chorus: "Chorus",
   "pre-chorus": "Pre-Chorus",
+  "pre chorus": "Pre-Chorus",
   bridge: "Bridge",
   tag: "Tag",
   outro: "Outro",
   intro: "Intro",
 };
 
-const SECTION_RE = /^\[([^\]]+)\]$/;
+const BRACKET_RE = /^\[([^\]]+)\]\s*$/;
+const HEADER_RE =
+  /^(verse|chorus|pre[- ]?chorus|bridge|tag|outro|intro)(?:\s+(\d+))?\s*:?\s*$/i;
 
-function resolveLabel(raw: string): SongSection["label"] {
-  return KNOWN_LABELS[raw.trim().toLowerCase()] ?? "Other";
+function toVerseLabel(n: number): SongSectionLabel {
+  return `Verse ${n}`;
+}
+
+function parseHeaderLabel(line: string): SongSectionLabel | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
+  const bracket = trimmed.match(BRACKET_RE);
+  const candidate = (bracket?.[1] ?? trimmed).trim();
+  const match = candidate.match(HEADER_RE);
+  if (!match) return null;
+
+  const kindRaw = match[1]?.toLowerCase() ?? "";
+  const kind = kindRaw.replace(/\s+/g, "-");
+  const num = match[2] ? Number(match[2]) : null;
+
+  if (kind === "verse") return toVerseLabel(num && num > 0 ? num : 1);
+  return KNOWN_LABELS[kindRaw] ?? KNOWN_LABELS[kind] ?? "Other";
 }
 
 function cleanLines(lines: string[]): string[] {
@@ -39,32 +60,43 @@ function cleanLines(lines: string[]): string[] {
 
 export function normalizeLyrics(raw: RawLyrics): NormalizedSong {
   const rawLines = raw.raw.split(/\r?\n/);
-  const hasHeaders = rawLines.some((l) => SECTION_RE.test(l.trim()));
+  const hasHeaders = rawLines.some((l) => parseHeaderLabel(l) !== null);
 
   if (!hasHeaders) {
     const cleaned = cleanLines(rawLines);
     return {
       title: raw.title,
       artist: raw.artist,
-      sections: cleaned.length > 0 ? [{ label: "Verse 1", lines: cleaned }] : [],
+      sections:
+        cleaned.length > 0 ? [{ label: toVerseLabel(1), lines: cleaned }] : [],
     };
   }
 
   const sections: SongSection[] = [];
-  let label: SongSection["label"] | null = null;
+  let label: SongSectionLabel | null = null;
   let buf: string[] = [];
+  const prelude: string[] = [];
 
   for (const rawLine of rawLines) {
-    const match = rawLine.trim().match(SECTION_RE);
-    if (match) {
+    const parsedLabel = parseHeaderLabel(rawLine);
+    if (parsedLabel) {
       if (label !== null) {
         const cleaned = cleanLines(buf);
         if (cleaned.length > 0) sections.push({ label, lines: cleaned });
       }
-      label = resolveLabel(match[1]);
+      label = parsedLabel;
       buf = [];
-    } else if (label !== null) {
-      buf.push(rawLine);
+      continue;
+    }
+
+    if (label === null) prelude.push(rawLine);
+    else buf.push(rawLine);
+  }
+
+  if (label !== null && prelude.length > 0) {
+    const cleanedPrelude = cleanLines(prelude);
+    if (cleanedPrelude.length > 0) {
+      sections.unshift({ label: toVerseLabel(1), lines: cleanedPrelude });
     }
   }
 

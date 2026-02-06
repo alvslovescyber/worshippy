@@ -1,8 +1,8 @@
 import type { Candidate, RawLyrics } from "../types";
 import type { LyricsProvider } from "./interface";
 
-// TODO: Implement real providers (e.g. SongSelect, Genius, etc.)
-// Swap by changing getProvider() below.
+// Note: This app currently ships with a mock provider for local development.
+// Replace `getProvider()` with a real provider when you're ready.
 
 interface MockSongMeta {
   id: string;
@@ -81,7 +81,7 @@ function buildRawText(meta: MockSongMeta): string {
       const header = `[${s.label}]`;
       const lines = Array.from(
         { length: s.lineCount },
-        (_, i) => `${s.title} - ${s.label} line ${i + 1}`,
+        (_, i) => `${meta.title} - ${s.label} line ${i + 1}`,
       );
       return `${header}\n${lines.join("\n")}`;
     })

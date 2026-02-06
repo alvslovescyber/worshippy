@@ -14,8 +14,18 @@ export interface RawLyrics {
   raw: string; // full lyrics text with section headers
 }
 
+export type SongSectionLabel =
+  | `Verse ${number}`
+  | "Chorus"
+  | "Pre-Chorus"
+  | "Bridge"
+  | "Tag"
+  | "Outro"
+  | "Intro"
+  | "Other";
+
 export interface SongSection {
-  label: "Verse 1" | "Verse 2" | "Verse 3" | "Verse 4" | "Chorus" | "Pre-Chorus" | "Bridge" | "Tag" | "Outro" | "Intro" | "Other";
+  label: SongSectionLabel;
   lines: string[];
 }
 
@@ -71,6 +81,7 @@ export interface ParseTitlesResponse {
 export interface SearchResponse {
   query: string;
   candidates: Candidate[];
+  topMatch?: NormalizedSong | null;
 }
 
 export interface GenerateRequest {
