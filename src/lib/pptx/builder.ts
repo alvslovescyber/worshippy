@@ -2,9 +2,10 @@ import PptxGenJS from "pptxgenjs";
 import { getTheme } from "./theme";
 import type { SlideContent, GenerateSettings } from "@/lib/types";
 
-const SLIDE_W = 10;
-const SLIDE_H = 5.625;
-const MARGIN = 0.7;
+// `LAYOUT_WIDE` is 13.333" × 7.5" (16:9 widescreen).
+const SLIDE_W = 13.333;
+const SLIDE_H = 7.5;
+const MARGIN = 1.0;
 
 function transparencyFromOpacity(opacity: number): number {
   const clamped = Math.min(1, Math.max(0, opacity));
@@ -39,7 +40,11 @@ function mixHex(a: string, b: string, t: number): string {
   });
 }
 
-function addBandedGradient(slide: PptxGenJS.Slide, color1: string, color2: string) {
+function addBandedGradient(
+  slide: PptxGenJS.Slide,
+  color1: string,
+  color2: string,
+) {
   const bands = [
     { y: 0, h: SLIDE_H * 0.42, c: color1 },
     { y: SLIDE_H * 0.32, h: SLIDE_H * 0.42, c: mixHex(color1, color2, 0.35) },
@@ -61,10 +66,10 @@ function addBandedGradient(slide: PptxGenJS.Slide, color1: string, color2: strin
 
 function addAccentGlow(slide: PptxGenJS.Slide, accentColor: string) {
   slide.addShape("ellipse" as unknown as PptxGenJS.ShapeType, {
-    x: SLIDE_W * 0.2,
-    y: -SLIDE_H * 0.25,
-    w: SLIDE_W * 0.6,
-    h: SLIDE_H * 0.8,
+    x: SLIDE_W * 0.22,
+    y: -SLIDE_H * 0.22,
+    w: SLIDE_W * 0.56,
+    h: SLIDE_H * 0.75,
     fill: { color: accentColor, transparency: 88 },
     line: { color: accentColor, transparency: 100 },
   });
@@ -101,7 +106,7 @@ export async function buildPptx(
       case "cover":
         slide.addText(sc.title ?? "Worship Set", {
           x: MARGIN,
-          y: SLIDE_H * 0.3,
+          y: SLIDE_H * 0.33,
           w: SLIDE_W - MARGIN * 2,
           h: 1,
           fontSize: theme.titleFontSize,
@@ -113,7 +118,7 @@ export async function buildPptx(
         if (sc.date) {
           slide.addText(sc.date, {
             x: MARGIN,
-            y: SLIDE_H * 0.3 + 1.1,
+            y: SLIDE_H * 0.33 + 1.15,
             w: SLIDE_W - MARGIN * 2,
             h: 0.5,
             fontSize: theme.subtitleFontSize,
@@ -137,7 +142,7 @@ export async function buildPptx(
       case "title":
         slide.addText(sc.title ?? "", {
           x: MARGIN,
-          y: SLIDE_H * 0.32,
+          y: SLIDE_H * 0.35,
           w: SLIDE_W - MARGIN * 2,
           h: 1,
           fontSize: theme.titleFontSize,
@@ -149,7 +154,7 @@ export async function buildPptx(
         if (sc.artist) {
           slide.addText(sc.artist, {
             x: MARGIN,
-            y: SLIDE_H * 0.32 + 1.1,
+            y: SLIDE_H * 0.35 + 1.15,
             w: SLIDE_W - MARGIN * 2,
             h: 0.5,
             fontSize: theme.subtitleFontSize,
@@ -159,9 +164,9 @@ export async function buildPptx(
           });
         }
         slide.addShape("rect" as unknown as PptxGenJS.ShapeType, {
-          x: SLIDE_W * 0.4,
-          y: SLIDE_H * 0.32 + 1.9,
-          w: SLIDE_W * 0.2,
+          x: SLIDE_W * 0.42,
+          y: SLIDE_H * 0.35 + 2.0,
+          w: SLIDE_W * 0.16,
           h: 0.05,
           fill: { color: theme.accentColor, transparency: 15 },
           line: { color: theme.accentColor, transparency: 100 },
@@ -199,6 +204,7 @@ export async function buildPptx(
             color: theme.accentColor,
             align: "center",
             italic: true,
+            margin: 0,
           });
           yOffset += 0.55;
         }
@@ -215,7 +221,7 @@ export async function buildPptx(
           align: "center",
           valign: "middle",
           lineSpacingMultiple: 1.3,
-          shrinkText: true,
+          margin: 0,
         });
         break;
       }

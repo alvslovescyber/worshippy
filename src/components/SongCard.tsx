@@ -9,6 +9,7 @@ import {
   faMagnifyingGlass,
   faPaste,
   faChevronDown,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import type { SongEntry, Candidate } from "@/lib/types";
 import { useState } from "react";
@@ -17,17 +18,26 @@ interface SongCardProps {
   entry: SongEntry;
   onSelectCandidate: (songId: string) => void;
   onPasteLyrics: (lyrics: string) => void;
+  onRemove: () => void;
 }
 
 export function SongCard({
   entry,
   onSelectCandidate,
   onPasteLyrics,
+  onRemove,
 }: SongCardProps) {
   const { query, status } = entry;
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [showDropdown, setShowDropdown] = useState(true);
+
+  const resolvedRaw =
+    status.phase === "resolved"
+      ? status.song.sections
+          .map((s) => `[${s.label}]\n${s.lines.join("\n")}`)
+          .join("\n\n")
+      : "";
 
   return (
     <motion.div
@@ -97,18 +107,22 @@ export function SongCard({
             </div>
           )}
 
-          {/* Error / Manual paste */}
+          {/* Manual paste / edit */}
           {(status.phase === "error" ||
             status.phase === "manual" ||
-            status.phase === "candidates") && (
+            status.phase === "candidates" ||
+            status.phase === "resolved") && (
             <div className="mt-3">
               {!showPaste ? (
                 <button
-                  onClick={() => setShowPaste(true)}
+                  onClick={() => {
+                    if (status.phase === "resolved") setPasteText(resolvedRaw);
+                    setShowPaste(true);
+                  }}
                   className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <FontAwesomeIcon icon={faPaste} className="w-3 h-3" />
-                  Paste lyrics manually
+                  {status.phase === "resolved" ? "Edit lyrics" : "Paste lyrics manually"}
                 </button>
               ) : (
                 <div className="space-y-2">
@@ -127,7 +141,7 @@ export function SongCard({
                       disabled={!pasteText.trim()}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
                     >
-                      Use these lyrics
+                      Save lyrics
                     </button>
                     <button
                       onClick={() => {
@@ -145,8 +159,17 @@ export function SongCard({
           )}
         </div>
 
-        {/* Right side status badge */}
-        <StatusBadge status={status} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <StatusBadge status={status} />
+          <button
+            type="button"
+            onClick={onRemove}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/6 transition-colors cursor-pointer"
+            aria-label={`Remove ${query}`}
+          >
+            <FontAwesomeIcon icon={faXmark} className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </motion.div>
   );
@@ -198,21 +221,21 @@ function StatusLabel({ status }: { status: SongEntry["status"] }) {
 
   switch (status.phase) {
     case "searching":
-      text = "Searching for lyrics...";
+      text = "Looking it up…";
       color = "text-white/40";
       break;
     case "candidates":
-      text = `Found ${status.candidates.length} match${status.candidates.length !== 1 ? "es" : ""}`;
+      text = "Multiple matches found";
       color = "text-blue-400/70";
       break;
     case "resolved":
       text = status.song.artist
-        ? `${status.song.artist} - ${status.song.sections.length} sections`
-        : `${status.song.sections.length} sections ready`;
+        ? `${status.song.artist} • ${status.song.sections.length} sections`
+        : `${status.song.sections.length} sections`;
       color = "text-emerald-400/70";
       break;
     case "manual":
-      text = "Waiting for pasted lyrics";
+      text = "Paste lyrics to continue";
       color = "text-yellow-400/70";
       break;
     case "error":
