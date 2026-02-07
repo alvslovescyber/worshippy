@@ -16,7 +16,7 @@ function lyricsFontSize(base: number, linesPerSlide: 2 | 3 | 4): number {
 export async function buildPptx(
   slides: SlideContent[],
   settings: GenerateSettings,
-): Promise<Buffer> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const pres = new PptxGenJS();
   pres.layout = "LAYOUT_WIDE";
 
@@ -24,7 +24,6 @@ export async function buildPptx(
   pres.theme = {
     headFontFace: theme.fontFace,
     bodyFontFace: theme.fontFace,
-    lang: "en-US",
   };
 
   for (const sc of slides) {
@@ -166,6 +165,16 @@ export async function buildPptx(
     }
   }
 
-  const output = await pres.write({ outputType: "nodebuffer" });
-  return output as Buffer;
+  const output = await pres.write({
+    outputType: "arraybuffer" as unknown as "arraybuffer",
+  });
+  const arrayBuffer = (
+    output instanceof ArrayBuffer
+      ? output
+      : ArrayBuffer.isView(output)
+        ? output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength)
+        : (output as unknown as ArrayBuffer)
+  ) as ArrayBuffer;
+
+  return new Uint8Array(arrayBuffer);
 }

@@ -26,10 +26,15 @@ import type {
 } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
 import { normalizeLyrics } from "@/lib/lyrics/normalize";
+import { getDemoLyrics, searchDemoCatalog } from "@/lib/providers/demoIndex";
+import { splitIntoSlides } from "@/lib/lyrics/split";
+import { buildPptx } from "@/lib/pptx/builder";
 
 type ToastState =
   | { visible: false; message: ""; type: "success" | "error" }
   | { visible: true; message: string; type: "success" | "error" };
+
+const IS_STATIC_EXPORT = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
 
 function issuesToMessage(issues: unknown): string | null {
   if (!Array.isArray(issues)) return null;
@@ -59,6 +64,29 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   }
 
   return payload as T;
+}
+
+function parseTitlesLocal(input: string): ParseTitlesResponse {
+  const raw = input
+    .split(/[,\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const seen = new Set<string>();
+  const titles: string[] = [];
+  for (const t of raw) {
+    const key = t.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      titles.push(t);
+    }
+  }
+
+  if (titles.length > 20) {
+    throw new Error(`Max 20 songs per batch (you sent ${titles.length}).`);
+  }
+
+  return { titles };
 }
 
 function shouldAutoSelect(candidates: Candidate[]): boolean {
@@ -148,7 +176,9 @@ export default function Home() {
     async (entryId: string, query: string) => {
       const token = resetToken.current;
       try {
-        const res = await postJson<SearchResponse>("/api/search", { query });
+        const res: SearchResponse = IS_STATIC_EXPORT
+          ? { query, candidates: searchDemoCatalog(query, { limit: 80, minScore: 0.18 }) }
+          : await postJson<SearchResponse>("/api/search", { query });
 
         if (token !== resetToken.current) return;
 
@@ -172,10 +202,14 @@ export default function Home() {
             return;
           }
 
-          const lyrics = await postJson<{ songId: string; song: NormalizedSong }>(
-            "/api/lyrics",
-            { songId: topId },
-          );
+          const lyrics: { songId: string; song: NormalizedSong } = IS_STATIC_EXPORT
+            ? {
+                songId: topId,
+                song: { ...normalizeLyrics(getDemoLyrics(topId)), source: "demo" },
+              }
+            : await postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
+                songId: topId,
+              });
 
           if (token !== resetToken.current) return;
 
@@ -241,9 +275,9 @@ export default function Home() {
     async (input: string) => {
       setDownloadedAt(null);
       try {
-        const parsed = await postJson<ParseTitlesResponse>("/api/parse-titles", {
-          input,
-        });
+        const parsed = IS_STATIC_EXPORT
+          ? parseTitlesLocal(input)
+          : await postJson<ParseTitlesResponse>("/api/parse-titles", { input });
 
         const candidates: SongEntry[] = parsed.titles.map((title) => ({
           id: crypto.randomUUID(),
@@ -275,10 +309,14 @@ export default function Home() {
     async (entryId: string, songId: string) => {
       updateEntryStatus(entryId, { phase: "searching" });
       try {
-        const lyrics = await postJson<{ songId: string; song: NormalizedSong }>(
-          "/api/lyrics",
-          { songId },
-        );
+        const lyrics: { songId: string; song: NormalizedSong } = IS_STATIC_EXPORT
+          ? {
+              songId,
+              song: { ...normalizeLyrics(getDemoLyrics(songId)), source: "demo" },
+            }
+          : await postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
+              songId,
+            });
         updateEntryStatus(entryId, { phase: "resolved", song: lyrics.song });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Could not load lyrics";
@@ -325,18 +363,33 @@ export default function Home() {
         settings: effectiveSettings,
       };
 
-      const res = await fetch("/api/generate-ppt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const blob = IS_STATIC_EXPORT
+        ? new Blob(
+            [
+              await buildPptx(
+                splitIntoSlides(payload.songs, payload.settings),
+                payload.settings,
+              ),
+            ],
+            {
+              type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            },
+          )
+        : await (async () => {
+            const res = await fetch("/api/generate-ppt", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
 
-      if (!res.ok) {
-        const errPayload = (await res.json().catch(() => null)) as unknown;
-        throw new Error(errorPayloadToMessage(errPayload) ?? "Generation failed");
-      }
+            if (!res.ok) {
+              const errPayload = (await res.json().catch(() => null)) as unknown;
+              throw new Error(errorPayloadToMessage(errPayload) ?? "Generation failed");
+            }
 
-      const blob = await res.blob();
+            return await res.blob();
+          })();
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

@@ -34,10 +34,14 @@ export async function POST(request: Request) {
     };
 
     const slides = splitIntoSlides(songs, settings);
-    const buffer = await buildPptx(slides, settings);
-    const fileBody = new Uint8Array(buffer);
+    const fileBody = await buildPptx(slides, settings);
+    const bytes = new Uint8Array(fileBody.byteLength);
+    bytes.set(fileBody);
+    const blob = new Blob([bytes.buffer], {
+      type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    });
 
-    return new NextResponse(fileBody, {
+    return new NextResponse(blob, {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.presentationml.presentation",

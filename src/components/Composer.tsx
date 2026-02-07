@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPaperPlane, faPlus } from "@fortawesome/free-solid-svg-icons";
 import type { Candidate, SearchResponse } from "@/lib/types";
+import { searchDemoCatalog } from "@/lib/providers/demoIndex";
 
 const MAX_SUGGESTIONS = 20;
+const IS_STATIC_EXPORT = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
 
 interface ComposerProps {
   onAddSong: (title: string) => void;
@@ -37,6 +39,14 @@ export function Composer({
     if (!canSuggest || disabled) {
       setSuggestions([]);
       setSuggestBusy(false);
+      return;
+    }
+
+    if (IS_STATIC_EXPORT) {
+      setSuggestBusy(false);
+      setSuggestions(
+        searchDemoCatalog(value.trim(), { limit: MAX_SUGGESTIONS, minScore: 0.18 }),
+      );
       return;
     }
 
