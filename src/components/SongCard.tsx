@@ -13,13 +13,15 @@ import {
   faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons";
 import type { SongEntry, Candidate } from "@/lib/types";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { autoFormatLyricsForEditor } from "@/lib/lyrics/format";
 
 interface SongCardProps {
   entry: SongEntry;
   onSelectCandidate: (candidate: Candidate) => void;
   onPasteLyrics: (lyrics: string) => void;
+  editorOpen?: boolean;
+  onEditorOpenChange?: (open: boolean) => void;
   onRemove: () => void;
 }
 
@@ -27,12 +29,23 @@ export function SongCard({
   entry,
   onSelectCandidate,
   onPasteLyrics,
+  editorOpen,
+  onEditorOpenChange,
   onRemove,
 }: SongCardProps) {
   const { query, status } = entry;
-  const [showPaste, setShowPaste] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const showPaste = editorOpen ?? internalOpen;
   const [pasteText, setPasteText] = useState("");
   const [showDropdown, setShowDropdown] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const setOpen = (open: boolean) => {
+    onEditorOpenChange?.(open);
+    if (!onEditorOpenChange) setInternalOpen(open);
+    if (!open) setShowHelp(false);
+  };
 
   const resolvedRaw =
     status.phase === "resolved"
@@ -40,6 +53,29 @@ export function SongCard({
           .map((s) => `[${s.label}]\n${s.lines.join("\n")}`)
           .join("\n\n")
       : "";
+
+  useEffect(() => {
+    if (!showPaste) return;
+    requestAnimationFrame(() => textareaRef.current?.focus());
+    if (pasteText.trim().length > 0) return;
+    if (status.phase !== "resolved") return;
+    setPasteText(resolvedRaw);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPaste, status.phase]);
+
+  const template = useMemo(
+    () => `[Verse 1]
+Line 1
+Line 2
+Line 3
+
+[Chorus]
+Line 1
+Line 2
+Line 3
+`,
+    [],
+  );
 
   return (
     <motion.div
@@ -113,17 +149,22 @@ export function SongCard({
                 <button
                   onClick={() => {
                     if (status.phase === "resolved") setPasteText(resolvedRaw);
-                    setShowPaste(true);
+                    setOpen(true);
                   }}
-                  className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className={
+                    status.phase === "manual"
+                      ? "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-500/20 bg-orange-500/10 text-xs text-orange-100 hover:bg-orange-500/15 transition-colors cursor-pointer font-semibold"
+                      : "text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  }
                 >
                   <FontAwesomeIcon icon={faPaste} className="w-3 h-3" />
-                  {status.phase === "resolved" ? "Edit lyrics" : "Paste lyrics manually"}
+                  {status.phase === "resolved" ? "Edit lyrics" : "Paste lyrics"}
                 </button>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <div className="rounded-xl border border-white/8 bg-black/20">
                     <textarea
+                      ref={textareaRef}
                       value={pasteText}
                       onChange={(e) => setPasteText(e.target.value)}
                       placeholder={`Paste lyrics for "${query}" here...\nAdd section headers like [Verse 1], [Chorus], [Bridge] for best results.`}
@@ -143,10 +184,18 @@ export function SongCard({
                       Auto-format
                     </button>
                     <button
+                      type="button"
+                      onClick={() => setShowHelp((s) => !s)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-white/60 hover:bg-white/8 transition-colors cursor-pointer"
+                      aria-label="Format help"
+                    >
+                      Help
+                    </button>
+                    <button
                       onClick={() => {
                         if (!pasteText.trim()) return;
                         onPasteLyrics(pasteText.trim());
-                        setShowPaste(false);
+                        setOpen(false);
                         setPasteText("");
                       }}
                       disabled={!pasteText.trim()}
@@ -156,7 +205,7 @@ export function SongCard({
                     </button>
                     <button
                       onClick={() => {
-                        setShowPaste(false);
+                        setOpen(false);
                         setPasteText("");
                       }}
                       className="px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/60 transition-colors cursor-pointer"
@@ -164,6 +213,39 @@ export function SongCard({
                       Cancel
                     </button>
                   </div>
+                  {showHelp && (
+                    <div className="absolute right-0 top-0 z-10 w-[320px] max-w-full rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl p-3 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
+                      <p className="text-[11px] text-white/70 font-semibold">
+                        Preferred format
+                      </p>
+                      <pre className="mt-2 text-[11px] leading-relaxed text-white/70 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                        {template}
+                      </pre>
+                      <div className="flex items-center justify-end gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPasteText((t) =>
+                              t.trim().length === 0
+                                ? template
+                                : `${t.trim()}\n\n${template}`,
+                            );
+                            setShowHelp(false);
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500/20 text-orange-300 hover:bg-orange-500/30 transition-colors cursor-pointer"
+                        >
+                          Insert template
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowHelp(false)}
+                          className="px-3 py-1.5 rounded-lg text-xs text-white/50 hover:text-white/70 transition-colors cursor-pointer"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <p className="text-[11px] text-white/30 leading-relaxed">
                     Auto-format is best-effort. It may misidentify Chorus/Bridge or miss
                     section breaks — review and edit labels as needed.
@@ -228,7 +310,7 @@ function StatusLabel({ entry }: { entry: SongEntry }) {
       color = "text-white/40";
       break;
     case "candidates":
-      text = "Multiple matches found";
+      text = "Pick the right song (optional)";
       color = "text-blue-400/70";
       break;
     case "resolved":
@@ -259,7 +341,7 @@ function StatusBadge({ status }: { status: SongEntry["status"] }) {
   if (status.phase === "candidates") {
     return (
       <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/20">
-        Choose
+        Select
       </span>
     );
   }
@@ -294,7 +376,7 @@ function StatusBadge({ status }: { status: SongEntry["status"] }) {
   if (status.phase === "manual") {
     return (
       <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
-        Manual
+        Needs lyrics
       </span>
     );
   }

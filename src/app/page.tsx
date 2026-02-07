@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   faArrowRotateRight,
   faFileArrowDown,
@@ -14,6 +14,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { GlassCard } from "@/components/GlassCard";
 import { Toast } from "@/components/Toast";
+import { BulkLyricsModal } from "@/components/BulkLyricsModal";
 import type {
   Candidate,
   GenerateSettings,
@@ -31,6 +32,8 @@ import { buildPptx } from "@/lib/pptx/builder";
 type ToastState =
   | { visible: false; message: ""; type: "success" | "error" }
   | { visible: true; message: string; type: "success" | "error" };
+
+const SESSION_KEY = "worshippy_state_v1";
 
 function parseTitlesLocal(input: string): ParseTitlesResponse {
   const raw = input
@@ -67,8 +70,10 @@ function shouldAutoSelect(candidates: Candidate[]): boolean {
 export default function Home() {
   const [settings, setSettings] = useState<GenerateSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const [entries, setEntries] = useState<SongEntry[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [downloadedAt, setDownloadedAt] = useState<string | null>(null);
 
@@ -79,6 +84,47 @@ export default function Home() {
   });
 
   const resetToken = useRef(0);
+
+  // Session-only autosave/restore (ephemeral; clears when the tab closes).
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== "object") return;
+      const rec = parsed as Record<string, unknown>;
+      const savedEntries = rec.entries;
+      const savedSettings = rec.settings;
+      if (Array.isArray(savedEntries)) {
+        const nextEntries = savedEntries as SongEntry[];
+        setEntries(nextEntries);
+        const firstNeedingLyrics = nextEntries.find((e) => e.status.phase !== "resolved");
+        setEditingId(firstNeedingLyrics?.id ?? null);
+      }
+      if (savedSettings && typeof savedSettings === "object") {
+        setSettings(savedSettings as GenerateSettings);
+      }
+      setToast({
+        visible: true,
+        type: "success",
+        message: "Restored your set list from this session.",
+      });
+    } catch {
+      // Ignore restore failures.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const t = window.setTimeout(() => {
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ entries, settings }));
+      } catch {
+        // Ignore save failures (e.g., storage full).
+      }
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [entries, settings]);
 
   const counts = useMemo(() => {
     let searching = 0;
@@ -196,6 +242,7 @@ export default function Home() {
 
       if (didAdd) {
         setDownloadedAt(null);
+        setEditingId(entry.id);
       }
     },
     [identifySong],
@@ -226,6 +273,7 @@ export default function Home() {
           const addable = candidates
             .filter((e) => !existing.has(e.query.toLowerCase()))
             .slice(0, remainingSlots);
+          setEditingId(addable[0]?.id ?? null);
           return addable.length > 0 ? [...prev, ...addable] : prev;
         });
       } catch (err) {
@@ -249,6 +297,7 @@ export default function Home() {
         };
       }),
     );
+    setEditingId(entryId);
   }, []);
 
   const pasteLyrics = useCallback(
@@ -263,15 +312,55 @@ export default function Home() {
         phase: "resolved",
         song: { ...song, source: "manual" },
       });
+      setEditingId((cur) => (cur === entryId ? null : cur));
     },
     [updateEntryStatus],
+  );
+
+  const applyBulkLyrics = useCallback(
+    (updates: Array<{ entryId: string; lyrics: string }>) => {
+      if (updates.length === 0) return;
+      setDownloadedAt(null);
+      setEditingId(null);
+
+      const byId = new Map(updates.map((u) => [u.entryId, u.lyrics]));
+      setEntries((prev) =>
+        prev.map((e) => {
+          const lyrics = byId.get(e.id);
+          if (!lyrics) return e;
+          const song = normalizeLyrics({
+            songId: `manual-${e.id}`,
+            title: e.query,
+            artist: e.artist,
+            raw: lyrics,
+          });
+          return {
+            ...e,
+            status: { phase: "resolved", song: { ...song, source: "manual" } },
+          };
+        }),
+      );
+
+      setToast({
+        visible: true,
+        type: "success",
+        message: `Applied lyrics to ${updates.length} song${updates.length === 1 ? "" : "s"}.`,
+      });
+    },
+    [],
   );
 
   const reset = useCallback(() => {
     resetToken.current += 1;
     setEntries([]);
+    setEditingId(null);
     setGenerating(false);
     setDownloadedAt(null);
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // ignore
+    }
   }, []);
 
   const generatePptx = useCallback(async () => {
@@ -374,6 +463,7 @@ export default function Home() {
 
                 if (!didAdd) return;
                 setDownloadedAt(null);
+                setEditingId(entry.id);
               }}
               onPasteSetList={pasteSetList}
               disabled={generating}
@@ -392,11 +482,23 @@ export default function Home() {
                     {counts.needsSelection > 0
                       ? ` • ${counts.needsSelection} need selection`
                       : ""}
-                    {counts.manual > 0 ? ` • ${counts.manual} manual` : ""}
+                    {counts.manual > 0 ? ` • ${counts.manual} need lyrics` : ""}
                   </p>
                 </div>
                 {counts.total > 0 && (
-                  <div className="text-[11px] text-white/30">Max 20 songs</div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBulkOpen(true);
+                        setEditingId(null);
+                      }}
+                      className="text-[11px] text-white/40 hover:text-white/65 transition-colors cursor-pointer"
+                    >
+                      Bulk paste lyrics
+                    </button>
+                    <div className="text-[11px] text-white/30">Max 20 songs</div>
+                  </div>
                 )}
               </div>
 
@@ -416,9 +518,15 @@ export default function Home() {
                       onPasteLyrics={(lyrics) =>
                         pasteLyrics(entry.id, entry.query, entry.artist, lyrics)
                       }
-                      onRemove={() =>
-                        setEntries((prev) => prev.filter((e) => e.id !== entry.id))
-                      }
+                      editorOpen={editingId === entry.id}
+                      onEditorOpenChange={(open) => {
+                        if (open) setEditingId(entry.id);
+                        else setEditingId((cur) => (cur === entry.id ? null : cur));
+                      }}
+                      onRemove={() => {
+                        setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+                        setEditingId((cur) => (cur === entry.id ? null : cur));
+                      }}
                     />
                   ))}
                 </div>
@@ -435,6 +543,13 @@ export default function Home() {
         onSettingsChange={setSettings}
       />
 
+      <BulkLyricsModal
+        open={bulkOpen}
+        entries={entries}
+        onClose={() => setBulkOpen(false)}
+        onApply={applyBulkLyrics}
+      />
+
       <div className="fixed bottom-6 left-0 right-0 px-6 z-30">
         <div className="max-w-5xl mx-auto">
           <div className="glass rounded-2xl px-4 py-3 border border-white/8 shadow-[0_20px_60px_rgba(0,0,0,0.45)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -449,7 +564,11 @@ export default function Home() {
                     ? downloadedAt
                       ? "Downloaded. Change settings to regenerate anytime."
                       : "All songs ready."
-                    : "Paste lyrics for each song to enable download."}
+                    : counts.manual > 0
+                      ? `${counts.manual} song${counts.manual === 1 ? "" : "s"} need lyrics before you can download.`
+                      : counts.needsSelection > 0
+                        ? "Select a match (optional), then paste lyrics to continue."
+                        : "Paste lyrics for each song to enable download."}
               </p>
             </div>
 
