@@ -24,10 +24,16 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Configure base path
+        run: |
+          echo "NEXT_PUBLIC_STATIC_EXPORT=true" >> "$GITHUB_ENV"
+          # If a custom domain is set (CNAME exists), the site is served from the domain root.
+          if [ -f public/CNAME ]; then
+            echo "NEXT_PUBLIC_BASE_PATH=" >> "$GITHUB_ENV"
+          else
+            echo "NEXT_PUBLIC_BASE_PATH=/${{ github.event.repository.name }}" >> "$GITHUB_ENV"
+          fi
       - run: npm run build
-        env:
-          NEXT_PUBLIC_STATIC_EXPORT: "true"
-          NEXT_PUBLIC_BASE_PATH: "/${{ github.event.repository.name }}"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
