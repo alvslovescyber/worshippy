@@ -170,7 +170,7 @@ export function SongCard({
                   </div>
                   <p className="text-[11px] text-white/30 leading-relaxed">
                     Auto-format removes common headers/metadata, chord-only
-                    lines, and splits lyrics into sections.
+                    lines, and tries to infer Chorus from repeated lines.
                   </p>
                 </div>
               )}

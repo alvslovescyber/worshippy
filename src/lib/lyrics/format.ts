@@ -109,15 +109,122 @@ function splitByBlankLines(lines: string[]): string[][] {
   return groups;
 }
 
+function normalizeForMatch(line: string): string {
+  return line
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findRepeatedStanzaIndex(stanzas: string[][]): string | null {
+  const counts = new Map<string, number>();
+  for (const stanza of stanzas) {
+    const key = stanza.map(normalizeForMatch).filter(Boolean).join("\n");
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let best: { key: string; count: number } | null = null;
+  for (const [key, count] of counts.entries()) {
+    if (count < 2) continue;
+    if (!best || count > best.count || (count === best.count && key.length > best.key.length)) {
+      best = { key, count };
+    }
+  }
+  return best?.key ?? null;
+}
+
+function inferChorusSequence(lines: string[]): { start: number; len: number }[] {
+  const norm = lines.map(normalizeForMatch);
+  const n = norm.length;
+  if (n < 8) return [];
+
+  type Seq = { len: number; starts: number[] };
+  const candidates = new Map<string, Seq>();
+
+  for (let len = 6; len >= 2; len--) {
+    for (let i = 0; i + len <= n; i++) {
+      const slice = norm.slice(i, i + len);
+      if (slice.some((s) => !s)) continue;
+      const key = slice.join("|");
+      const existing = candidates.get(key);
+      if (existing) existing.starts.push(i);
+      else candidates.set(key, { len, starts: [i] });
+    }
+  }
+
+  let best: { key: string; len: number; starts: number[]; score: number } | null = null;
+  for (const [key, seq] of candidates.entries()) {
+    if (seq.starts.length < 2) continue;
+    // Prefer longer sequences that repeat more often.
+    const score = seq.len * seq.starts.length;
+    if (!best || score > best.score || (score === best.score && seq.len > best.len)) {
+      best = { key, len: seq.len, starts: seq.starts, score };
+    }
+  }
+
+  if (!best) return [];
+
+  const starts = [...best.starts].sort((a, b) => a - b);
+  const dedup: number[] = [];
+  for (const s of starts) {
+    const last = dedup[dedup.length - 1];
+    if (last === undefined || s - last >= best.len) dedup.push(s);
+  }
+
+  return dedup.map((start) => ({ start, len: best.len }));
+}
+
 export function autoFormatLyricsForEditor(raw: string): string {
   const lines = cleanLines(raw);
   const hasHeaders = lines.some((l) => parseHeaderLabel(l) !== null);
 
   if (!hasHeaders) {
     const stanzas = splitByBlankLines(lines);
-    return stanzas
-      .map((stanza, idx) => `[${toVerseLabel(idx + 1)}]\n${stanza.join("\n")}`)
-      .join("\n\n");
+    if (stanzas.length > 1) {
+      const chorusKey = findRepeatedStanzaIndex(stanzas);
+      const isChorus = (stanza: string[]) =>
+        chorusKey !== null &&
+        stanza.map(normalizeForMatch).filter(Boolean).join("\n") === chorusKey;
+
+      const chorusCount = stanzas.filter(isChorus).length;
+      const lastChorusIdx = chorusKey
+        ? stanzas.map((s, i) => (isChorus(s) ? i : -1)).filter((i) => i >= 0).pop() ?? -1
+        : -1;
+
+      let verseNum = 1;
+      const formatted = stanzas.map((stanza, idx) => {
+        if (isChorus(stanza)) return `[Chorus]\n${stanza.join("\n")}`;
+        if (chorusCount >= 2 && idx > lastChorusIdx) return `[Bridge]\n${stanza.join("\n")}`;
+        return `[${toVerseLabel(verseNum++)}]\n${stanza.join("\n")}`;
+      });
+      return formatted.join("\n\n");
+    }
+
+    const one = stanzas[0] ?? [];
+    const chorusSpans = inferChorusSequence(one);
+    if (chorusSpans.length === 0) {
+      return `[${toVerseLabel(1)}]\n${one.join("\n")}`;
+    }
+
+    const out: { label: SongSectionLabel; lines: string[] }[] = [];
+    let verseNum = 1;
+    let i = 0;
+
+    for (const span of chorusSpans) {
+      if (span.start > i) {
+        const chunk = one.slice(i, span.start).filter((l) => l.trim() !== "");
+        if (chunk.length > 0) out.push({ label: toVerseLabel(verseNum++), lines: chunk });
+      }
+      const chorusLines = one.slice(span.start, span.start + span.len);
+      out.push({ label: "Chorus", lines: chorusLines });
+      i = span.start + span.len;
+    }
+
+    const tail = one.slice(i).filter((l) => l.trim() !== "");
+    if (tail.length > 0) out.push({ label: toVerseLabel(verseNum), lines: tail });
+
+    return out.map((s) => `[${s.label}]\n${s.lines.join("\n")}`).join("\n\n");
   }
 
   const sections: { label: SongSectionLabel; lines: string[] }[] = [];
@@ -141,4 +248,3 @@ export function autoFormatLyricsForEditor(raw: string): string {
     .map((s) => `[${s.label}]\n${s.lines.join("\n")}`)
     .join("\n\n");
 }
-
