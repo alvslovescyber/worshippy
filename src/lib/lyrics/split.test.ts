@@ -53,6 +53,46 @@ describe("splitIntoSlides", () => {
     expect(lyricSlides.map((s) => s.lines?.length)).toEqual([3, 2, 2]);
   });
 
+  it("avoids 1-line slides in 2-lines mode by allowing a 3-line slide", () => {
+    const songs: NormalizedSong[] = [
+      {
+        title: "Song A",
+        sections: [{ label: "Verse 1", lines: ["A", "B", "C"] }],
+      },
+    ];
+
+    const settings: GenerateSettings = {
+      linesPerSlide: 2,
+      showSectionLabels: false,
+      theme: "dark",
+    };
+
+    const slides = splitIntoSlides(songs, settings);
+    const lyricSlides = slides.filter((s) => s.type === "lyrics");
+    expect(lyricSlides.map((s) => s.lines?.length)).toEqual([3]);
+    expect(lyricSlides[0]?.lines).toEqual(["A", "B", "C"]);
+  });
+
+  it("merges accidental 1-line stanzas in 2-lines mode", () => {
+    const songs: NormalizedSong[] = [
+      {
+        title: "Song A",
+        sections: [{ label: "Verse 1", lines: ["A", "", "B", "C"] }],
+      },
+    ];
+
+    const settings: GenerateSettings = {
+      linesPerSlide: 2,
+      showSectionLabels: false,
+      theme: "dark",
+    };
+
+    const slides = splitIntoSlides(songs, settings);
+    const lyricSlides = slides.filter((s) => s.type === "lyrics");
+    expect(lyricSlides.map((s) => s.lines?.length)).toEqual([3]);
+    expect(lyricSlides[0]?.lines).toEqual(["A", "B", "C"]);
+  });
+
   it("adds section labels only when enabled", () => {
     const songs: NormalizedSong[] = [
       {

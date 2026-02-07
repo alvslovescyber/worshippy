@@ -13,6 +13,12 @@ function lyricsFontSize(base: number, linesPerSlide: 2 | 3 | 4): number {
   return base;
 }
 
+function clampLinesPerSlide(n: number): 2 | 3 | 4 {
+  if (n <= 2) return 2;
+  if (n >= 4) return 4;
+  return 3;
+}
+
 function sizeDelta(size: GenerateSettings["lyricsTextSize"]): number {
   switch (size) {
     case "sm":
@@ -171,13 +177,14 @@ export async function buildPptx(
         }
 
         const lyricsText = (sc.lines ?? []).join("\n");
+        const basis = clampLinesPerSlide(sc.lines?.length ?? settings.linesPerSlide);
         slide.addText(lyricsText, {
           x,
           y,
           w,
           h: SLIDE_H - y - lyricsMargin,
           fontSize:
-            lyricsFontSize(theme.lyricsFontSize, settings.linesPerSlide) +
+            lyricsFontSize(theme.lyricsFontSize, basis) +
             sizeDelta(settings.lyricsTextSize),
           fontFace,
           color: lyricTextColor,
