@@ -10,9 +10,11 @@ import {
   faPaste,
   faChevronDown,
   faXmark,
+  faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons";
 import type { SongEntry, Candidate } from "@/lib/types";
 import { useState } from "react";
+import { autoFormatLyricsForEditor } from "@/lib/lyrics/format";
 
 interface SongCardProps {
   entry: SongEntry;
@@ -135,6 +137,19 @@ export function SongCard({
                   />
                   <div className="flex gap-2">
                     <button
+                      type="button"
+                      onClick={() => setPasteText(autoFormatLyricsForEditor(pasteText))}
+                      disabled={!pasteText.trim()}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-white/60 hover:bg-white/8 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-2"
+                      title="Cleans up formatting and organizes sections"
+                    >
+                      <FontAwesomeIcon
+                        icon={faWandMagicSparkles}
+                        className="w-3 h-3"
+                      />
+                      Auto-format
+                    </button>
+                    <button
                       onClick={() => {
                         if (pasteText.trim()) onPasteLyrics(pasteText.trim());
                       }}
@@ -153,6 +168,10 @@ export function SongCard({
                       Cancel
                     </button>
                   </div>
+                  <p className="text-[11px] text-white/30 leading-relaxed">
+                    Auto-format removes common headers/metadata, chord-only
+                    lines, and splits lyrics into sections.
+                  </p>
                 </div>
               )}
             </div>
@@ -259,6 +278,20 @@ function StatusBadge({ status }: { status: SongEntry["status"] }) {
     );
   }
   if (status.phase === "resolved") {
+    if (status.song.source === "demo") {
+      return (
+        <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-orange-500/15 text-orange-300 border border-orange-500/20">
+          Demo lyrics
+        </span>
+      );
+    }
+    if (status.song.source === "manual") {
+      return (
+        <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+          Ready
+        </span>
+      );
+    }
     return (
       <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
         Ready

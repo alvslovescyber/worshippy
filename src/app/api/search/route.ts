@@ -6,6 +6,7 @@ import type { NormalizedSong } from "@/lib/types";
 
 const schema = z.object({
   query: z.string().min(1).max(200),
+  suggestOnly: z.boolean().optional(),
 });
 
 function shouldAutoSelect(candidates: { score: number }[]): boolean {
@@ -29,9 +30,9 @@ export async function POST(request: Request) {
     const candidates = await provider.searchSongs(parsed.data.query);
 
     let topMatch: NormalizedSong | null = null;
-    if (shouldAutoSelect(candidates)) {
+    if (!parsed.data.suggestOnly && shouldAutoSelect(candidates)) {
       const raw = await provider.getLyrics(candidates[0].id);
-      topMatch = normalizeLyrics(raw);
+      topMatch = { ...normalizeLyrics(raw), source: "demo" };
     }
 
     return NextResponse.json({ query: parsed.data.query, candidates, topMatch });

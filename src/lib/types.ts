@@ -33,6 +33,7 @@ export interface NormalizedSong {
   title: string;
   artist?: string;
   sections: SongSection[];
+  source?: "demo" | "manual" | "provider";
 }
 
 export interface SlideContent {

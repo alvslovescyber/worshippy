@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
     const provider = getProvider();
     const raw = await provider.getLyrics(parsed.data.songId);
-    const song = normalizeLyrics(raw);
+    const song = { ...normalizeLyrics(raw), source: "demo" as const };
 
     return NextResponse.json({ songId: parsed.data.songId, song });
   } catch (err) {
@@ -25,4 +25,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
-

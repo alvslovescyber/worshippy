@@ -1,40 +1,82 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPaperPlane, faPlus } from "@fortawesome/free-solid-svg-icons";
+import type { Candidate, SearchResponse } from "@/lib/types";
 
 interface ComposerProps {
   onAddSong: (title: string) => void;
+  onAddCandidate?: (candidate: Candidate) => void;
   onPasteSetList: (input: string) => void;
   disabled?: boolean;
 }
 
 export function Composer({
   onAddSong,
+  onAddCandidate,
   onPasteSetList,
   disabled = false,
 }: ComposerProps) {
   const [mode, setMode] = useState<"single" | "paste">("single");
   const [value, setValue] = useState("");
+  const [suggestions, setSuggestions] = useState<Candidate[]>([]);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const suggestReqId = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleAdd = useCallback(() => {
+  const canSuggest = useMemo(() => mode === "single" && value.trim().length >= 2, [mode, value]);
+
+  useEffect(() => {
+    if (!canSuggest || disabled) {
+      setSuggestions([]);
+      setSuggestBusy(false);
+      return;
+    }
+
+    const id = ++suggestReqId.current;
+    setSuggestBusy(true);
+    const q = value.trim();
+
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q, suggestOnly: true }),
+        });
+        const payload = (await res.json().catch(() => null)) as unknown;
+        if (id !== suggestReqId.current) return;
+        if (!res.ok || !payload || typeof payload !== "object") {
+          setSuggestions([]);
+          return;
+        }
+        const data = payload as SearchResponse;
+        setSuggestions(Array.isArray(data.candidates) ? data.candidates.slice(0, 8) : []);
+      } finally {
+        if (id === suggestReqId.current) setSuggestBusy(false);
+      }
+    }, 220);
+
+    return () => window.clearTimeout(t);
+  }, [canSuggest, disabled, mode, value]);
+
+  const handleAdd = () => {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
     onAddSong(trimmed);
     setValue("");
     inputRef.current?.focus();
-  }, [value, disabled, onAddSong]);
+  };
 
-  const handlePasteSubmit = useCallback(() => {
+  const handlePasteSubmit = () => {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
     onPasteSetList(trimmed);
     setValue("");
     setMode("single");
-  }, [value, disabled, onPasteSetList]);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && mode === "single") {
@@ -53,7 +95,7 @@ export function Composer({
     <div className="glass rounded-2xl p-3">
       {mode === "single" ? (
         <>
-          <div className="flex items-end gap-3">
+          <div className="flex items-end gap-3 relative">
             <div className="flex-1 min-w-0">
               <input
                 ref={inputRef}
@@ -64,6 +106,42 @@ export function Composer({
                 disabled={disabled}
                 className="w-full bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none py-2 px-1 disabled:opacity-40"
               />
+
+              {(suggestBusy || suggestions.length > 0) && (
+                <div className="mt-2 rounded-xl border border-white/10 bg-black/30 backdrop-blur-xl overflow-hidden">
+                  {suggestBusy && suggestions.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-white/35">Searching…</div>
+                  ) : (
+                    <div className="divide-y divide-white/8">
+                      {suggestions.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            if (disabled) return;
+                            if (onAddCandidate) onAddCandidate(c);
+                            else onAddSong(c.title);
+                            setValue("");
+                            setSuggestions([]);
+                            inputRef.current?.focus();
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-white/6 transition-colors flex items-center justify-between gap-3 cursor-pointer"
+                        >
+                          <span className="text-xs text-white/80 truncate">
+                            {c.title}
+                            {c.artist ? (
+                              <span className="text-white/35"> • {c.artist}</span>
+                            ) : null}
+                          </span>
+                          <span className="text-[10px] text-white/25 flex-shrink-0">
+                            {Math.round(c.score * 100)}%
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <button
               onClick={handleAdd}

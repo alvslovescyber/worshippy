@@ -134,6 +134,12 @@ export default function Home() {
     return songs;
   }, [entries]);
 
+  const demoCount = useMemo(() => {
+    let n = 0;
+    for (const s of resolvedSongs) if (s.source === "demo") n += 1;
+    return n;
+  }, [resolvedSongs]);
+
   const updateEntryStatus = useCallback((id: string, status: SongStatus) => {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, status } : e)));
   }, []);
@@ -291,7 +297,10 @@ export default function Home() {
         title: query,
         raw: rawText,
       });
-      updateEntryStatus(entryId, { phase: "resolved", song });
+      updateEntryStatus(entryId, {
+        phase: "resolved",
+        song: { ...song, source: "manual" },
+      });
     },
     [updateEntryStatus],
   );
@@ -376,11 +385,53 @@ export default function Home() {
               </p>
             </div>
 
-            <Composer
-              onAddSong={addSong}
-              onPasteSetList={pasteSetList}
-              disabled={generating}
-            />
+              <Composer
+                onAddSong={addSong}
+                onAddCandidate={(c) => {
+                  const entry: SongEntry = {
+                    id: crypto.randomUUID(),
+                    query: c.title,
+                    status: { phase: "searching" },
+                  };
+
+                  let hitLimit = false;
+                  let didAdd = false;
+                  setEntries((prev) => {
+                    const existing = new Set(prev.map((e) => e.query.toLowerCase()));
+                    if (existing.has(entry.query.toLowerCase())) return prev;
+                    if (prev.length >= 20) {
+                      hitLimit = true;
+                      return prev;
+                    }
+                    didAdd = true;
+                    return [...prev, entry];
+                  });
+
+                  if (hitLimit) {
+                    setToast({
+                      visible: true,
+                      type: "error",
+                      message: "Max 20 songs per set list.",
+                    });
+                    return;
+                  }
+
+                  if (!didAdd) return;
+                  setDownloadedAt(null);
+                  postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
+                    songId: c.id,
+                  })
+                    .then((res) =>
+                      updateEntryStatus(entry.id, { phase: "resolved", song: res.song }),
+                    )
+                    .catch((err: unknown) => {
+                      const msg = err instanceof Error ? err.message : "Could not load lyrics";
+                      updateEntryStatus(entry.id, { phase: "error", message: msg });
+                    });
+                }}
+                onPasteSetList={pasteSetList}
+                disabled={generating}
+              />
 
             <GlassCard noPadding className="p-5">
               <div className="flex items-center justify-between gap-3 mb-4">
@@ -402,6 +453,16 @@ export default function Home() {
                   <div className="text-[11px] text-white/30">Max 20 songs</div>
                 )}
               </div>
+
+              {demoCount > 0 && (
+                <div className="mb-4 rounded-xl border border-orange-500/20 bg-orange-500/8 px-4 py-3">
+                  <p className="text-xs text-orange-200/80 leading-relaxed">
+                    Demo mode: lyrics are placeholders. Click{" "}
+                    <span className="font-semibold">Edit lyrics</span> on each
+                    song to paste the real lyrics before downloading.
+                  </p>
+                </div>
+              )}
 
               {counts.total === 0 ? (
                 <div className="rounded-xl border border-white/8 bg-white/[0.02] p-5">
