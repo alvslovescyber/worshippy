@@ -57,6 +57,7 @@ export type SongStatus =
 export interface SongEntry {
   id: string;
   query: string;
+  artist?: string;
   status: SongStatus;
 }
 

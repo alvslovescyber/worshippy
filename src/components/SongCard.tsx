@@ -18,7 +18,7 @@ import { autoFormatLyricsForEditor } from "@/lib/lyrics/format";
 
 interface SongCardProps {
   entry: SongEntry;
-  onSelectCandidate: (songId: string) => void;
+  onSelectCandidate: (candidate: Candidate) => void;
   onPasteLyrics: (lyrics: string) => void;
   onRemove: () => void;
 }
@@ -54,7 +54,7 @@ export function SongCard({
             <StatusIcon status={status} />
             <h3 className="text-sm font-semibold text-white truncate">{query}</h3>
           </div>
-          <StatusLabel status={status} />
+          <StatusLabel entry={entry} />
 
           {/* Candidates dropdown */}
           {status.phase === "candidates" && status.candidates.length > 0 && (
@@ -79,7 +79,7 @@ export function SongCard({
                   {status.candidates.map((c: Candidate) => (
                     <button
                       key={c.id}
-                      onClick={() => onSelectCandidate(c.id)}
+                      onClick={() => onSelectCandidate(c)}
                       className="w-full text-left px-3 py-2 rounded-xl text-xs hover:bg-white/8 transition-colors flex items-center justify-between cursor-pointer border border-white/8 bg-white/[0.02]"
                     >
                       <span className="text-white/80">
@@ -217,13 +217,14 @@ function StatusIcon({ status }: { status: SongEntry["status"] }) {
   }
 }
 
-function StatusLabel({ status }: { status: SongEntry["status"] }) {
+function StatusLabel({ entry }: { entry: SongEntry }) {
+  const status = entry.status;
   let text = "";
   let color = "text-white/40";
 
   switch (status.phase) {
     case "searching":
-      text = "Looking it up…";
+      text = "Working…";
       color = "text-white/40";
       break;
     case "candidates":
@@ -237,7 +238,9 @@ function StatusLabel({ status }: { status: SongEntry["status"] }) {
       color = "text-emerald-400/70";
       break;
     case "manual":
-      text = "Paste lyrics to continue";
+      text = entry.artist
+        ? `${entry.artist} • paste lyrics to continue`
+        : "Paste lyrics to continue";
       color = "text-yellow-400/70";
       break;
     case "error":
@@ -281,7 +284,14 @@ function StatusBadge({ status }: { status: SongEntry["status"] }) {
       </span>
     );
   }
-  if (status.phase === "error" || status.phase === "manual") {
+  if (status.phase === "error") {
+    return (
+      <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-red-500/15 text-red-300 border border-red-500/20">
+        Error
+      </span>
+    );
+  }
+  if (status.phase === "manual") {
     return (
       <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
         Manual

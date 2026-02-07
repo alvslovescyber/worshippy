@@ -16,55 +16,21 @@ import { GlassCard } from "@/components/GlassCard";
 import { Toast } from "@/components/Toast";
 import type {
   Candidate,
-  GenerateRequest,
   GenerateSettings,
   NormalizedSong,
   ParseTitlesResponse,
-  SearchResponse,
   SongEntry,
   SongStatus,
 } from "@/lib/types";
 import { DEFAULT_SETTINGS } from "@/lib/types";
 import { normalizeLyrics } from "@/lib/lyrics/normalize";
-import { getDemoLyrics, searchDemoCatalog } from "@/lib/providers/demoIndex";
+import { searchDemoCatalog } from "@/lib/providers/demoIndex";
 import { splitIntoSlides } from "@/lib/lyrics/split";
 import { buildPptx } from "@/lib/pptx/builder";
 
 type ToastState =
   | { visible: false; message: ""; type: "success" | "error" }
   | { visible: true; message: string; type: "success" | "error" };
-
-const IS_STATIC_EXPORT = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
-
-function issuesToMessage(issues: unknown): string | null {
-  if (!Array.isArray(issues)) return null;
-  const first = issues[0] as { message?: unknown } | undefined;
-  return typeof first?.message === "string" ? first.message : null;
-}
-
-function errorPayloadToMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const record = payload as Record<string, unknown>;
-  if (typeof record.error === "string") return record.error;
-  return issuesToMessage(record.error);
-}
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const payload = (await res.json().catch(() => null)) as unknown;
-
-  if (!res.ok) {
-    const msg = errorPayloadToMessage(payload) ?? "Request failed";
-    throw new Error(msg);
-  }
-
-  return payload as T;
-}
 
 function parseTitlesLocal(input: string): ParseTitlesResponse {
   const raw = input
@@ -152,7 +118,6 @@ export default function Home() {
   }, [entries]);
 
   const allResolved = counts.total > 0 && counts.ready === counts.total;
-  const busy = counts.searching > 0;
 
   const resolvedSongs = useMemo(() => {
     const songs: NormalizedSong[] = [];
@@ -162,82 +127,48 @@ export default function Home() {
     return songs;
   }, [entries]);
 
-  const demoCount = useMemo(() => {
-    let n = 0;
-    for (const s of resolvedSongs) if (s.source === "demo") n += 1;
-    return n;
-  }, [resolvedSongs]);
-
   const updateEntryStatus = useCallback((id: string, status: SongStatus) => {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, status } : e)));
   }, []);
 
-  const runSearch = useCallback(
-    async (entryId: string, query: string) => {
-      const token = resetToken.current;
-      try {
-        const res: SearchResponse = IS_STATIC_EXPORT
-          ? { query, candidates: searchDemoCatalog(query, { limit: 80, minScore: 0.18 }) }
-          : await postJson<SearchResponse>("/api/search", { query });
+  const identifySong = useCallback((query: string) => {
+    const candidates = searchDemoCatalog(query, { limit: 40, minScore: 0.18 });
+    if (candidates.length === 0) {
+      return { phase: "manual" as const, query, artist: undefined as string | undefined };
+    }
 
-        if (token !== resetToken.current) return;
+    if (shouldAutoSelect(candidates)) {
+      const top = candidates[0];
+      return {
+        phase: "manual" as const,
+        query: top?.title ?? query,
+        artist: top?.artist,
+      };
+    }
 
-        if (res.candidates.length === 0) {
-          updateEntryStatus(entryId, { phase: "manual" });
-          return;
-        }
-
-        if (shouldAutoSelect(res.candidates)) {
-          if (res.topMatch) {
-            updateEntryStatus(entryId, { phase: "resolved", song: res.topMatch });
-            return;
-          }
-
-          const topId = res.candidates[0]?.id;
-          if (!topId) {
-            updateEntryStatus(entryId, {
-              phase: "error",
-              message: "No matches found.",
-            });
-            return;
-          }
-
-          const lyrics: { songId: string; song: NormalizedSong } = IS_STATIC_EXPORT
-            ? {
-                songId: topId,
-                song: { ...normalizeLyrics(getDemoLyrics(topId)), source: "demo" },
-              }
-            : await postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
-                songId: topId,
-              });
-
-          if (token !== resetToken.current) return;
-
-          updateEntryStatus(entryId, { phase: "resolved", song: lyrics.song });
-          return;
-        }
-
-        updateEntryStatus(entryId, {
-          phase: "candidates",
-          candidates: res.candidates,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Search failed";
-        updateEntryStatus(entryId, { phase: "error", message: msg });
-      }
-    },
-    [updateEntryStatus],
-  );
+    return {
+      phase: "candidates" as const,
+      candidates,
+      query,
+      artist: undefined as string | undefined,
+    };
+  }, []);
 
   const addSong = useCallback(
     (title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
 
+      const identified = identifySong(trimmed);
+
       const entry: SongEntry = {
         id: crypto.randomUUID(),
-        query: trimmed,
-        status: { phase: "searching" },
+        query: identified.query,
+        artist: identified.artist,
+        status:
+          identified.phase === "candidates"
+            ? { phase: "candidates", candidates: identified.candidates }
+            : { phase: "manual" },
       };
 
       let didAdd = false;
@@ -245,7 +176,7 @@ export default function Home() {
 
       setEntries((prev) => {
         const existing = new Set(prev.map((e) => e.query.toLowerCase()));
-        if (existing.has(trimmed.toLowerCase())) return prev;
+        if (existing.has(entry.query.toLowerCase())) return prev;
         if (prev.length >= 20) {
           hitLimit = true;
           return prev;
@@ -265,72 +196,67 @@ export default function Home() {
 
       if (didAdd) {
         setDownloadedAt(null);
-        runSearch(entry.id, entry.query);
       }
     },
-    [runSearch],
+    [identifySong],
   );
 
   const pasteSetList = useCallback(
     async (input: string) => {
       setDownloadedAt(null);
       try {
-        const parsed = IS_STATIC_EXPORT
-          ? parseTitlesLocal(input)
-          : await postJson<ParseTitlesResponse>("/api/parse-titles", { input });
+        const parsed = parseTitlesLocal(input);
 
-        const candidates: SongEntry[] = parsed.titles.map((title) => ({
-          id: crypto.randomUUID(),
-          query: title,
-          status: { phase: "searching" },
-        }));
+        const candidates: SongEntry[] = parsed.titles.map((title) => {
+          const identified = identifySong(title);
+          return {
+            id: crypto.randomUUID(),
+            query: identified.query,
+            artist: identified.artist,
+            status:
+              identified.phase === "candidates"
+                ? { phase: "candidates", candidates: identified.candidates }
+                : { phase: "manual" },
+          };
+        });
 
-        let entriesToSearch: SongEntry[] = [];
         setEntries((prev) => {
           const existing = new Set(prev.map((e) => e.query.toLowerCase()));
           const remainingSlots = Math.max(0, 20 - prev.length);
           const addable = candidates
             .filter((e) => !existing.has(e.query.toLowerCase()))
             .slice(0, remainingSlots);
-          entriesToSearch = addable;
           return addable.length > 0 ? [...prev, ...addable] : prev;
         });
-
-        await Promise.allSettled(entriesToSearch.map((e) => runSearch(e.id, e.query)));
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Could not add songs";
         setToast({ visible: true, type: "error", message: msg });
       }
     },
-    [runSearch],
+    [identifySong],
   );
 
-  const resolveCandidate = useCallback(
-    async (entryId: string, songId: string) => {
-      updateEntryStatus(entryId, { phase: "searching" });
-      try {
-        const lyrics: { songId: string; song: NormalizedSong } = IS_STATIC_EXPORT
-          ? {
-              songId,
-              song: { ...normalizeLyrics(getDemoLyrics(songId)), source: "demo" },
-            }
-          : await postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
-              songId,
-            });
-        updateEntryStatus(entryId, { phase: "resolved", song: lyrics.song });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Could not load lyrics";
-        updateEntryStatus(entryId, { phase: "error", message: msg });
-      }
-    },
-    [updateEntryStatus],
-  );
+  const selectCandidate = useCallback((entryId: string, candidate: Candidate) => {
+    setDownloadedAt(null);
+    setEntries((prev) =>
+      prev.map((e) => {
+        if (e.id !== entryId) return e;
+        return {
+          ...e,
+          query: candidate.title,
+          artist: candidate.artist,
+          status: { phase: "manual" },
+        };
+      }),
+    );
+  }, []);
 
   const pasteLyrics = useCallback(
-    (entryId: string, query: string, rawText: string) => {
+    (entryId: string, query: string, artist: string | undefined, rawText: string) => {
       const song = normalizeLyrics({
         songId: `manual-${entryId}`,
         title: query,
+        artist,
         raw: rawText,
       });
       updateEntryStatus(entryId, {
@@ -358,37 +284,17 @@ export default function Home() {
         theme: "dark",
         backgroundImage: undefined,
       };
-      const payload: GenerateRequest = {
-        songs: resolvedSongs,
-        settings: effectiveSettings,
-      };
-
-      const blob = IS_STATIC_EXPORT
-        ? new Blob(
-            [
-              await buildPptx(
-                splitIntoSlides(payload.songs, payload.settings),
-                payload.settings,
-              ),
-            ],
-            {
-              type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            },
-          )
-        : await (async () => {
-            const res = await fetch("/api/generate-ppt", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-            });
-
-            if (!res.ok) {
-              const errPayload = (await res.json().catch(() => null)) as unknown;
-              throw new Error(errorPayloadToMessage(errPayload) ?? "Generation failed");
-            }
-
-            return await res.blob();
-          })();
+      const bytes = await buildPptx(
+        splitIntoSlides(resolvedSongs, effectiveSettings),
+        effectiveSettings,
+      );
+      const arrayBuffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      );
+      const blob = new Blob([arrayBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      });
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -429,8 +335,8 @@ export default function Home() {
                 Worship lyrics decks, done.
               </h1>
               <p className="text-sm md:text-[15px] leading-relaxed text-white/45 max-w-xl">
-                Add songs one-by-one (or paste a set list), resolve any matches, then
-                download a polished editable PowerPoint.
+                Add songs one-by-one (or paste a set list), paste lyrics, then download a
+                polished editable PowerPoint.
               </p>
             </div>
 
@@ -440,7 +346,8 @@ export default function Home() {
                 const entry: SongEntry = {
                   id: crypto.randomUUID(),
                   query: c.title,
-                  status: { phase: "searching" },
+                  artist: c.artist,
+                  status: { phase: "manual" },
                 };
 
                 let hitLimit = false;
@@ -467,17 +374,6 @@ export default function Home() {
 
                 if (!didAdd) return;
                 setDownloadedAt(null);
-                postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
-                  songId: c.id,
-                })
-                  .then((res) =>
-                    updateEntryStatus(entry.id, { phase: "resolved", song: res.song }),
-                  )
-                  .catch((err: unknown) => {
-                    const msg =
-                      err instanceof Error ? err.message : "Could not load lyrics";
-                    updateEntryStatus(entry.id, { phase: "error", message: msg });
-                  });
               }}
               onPasteSetList={pasteSetList}
               disabled={generating}
@@ -504,16 +400,6 @@ export default function Home() {
                 )}
               </div>
 
-              {demoCount > 0 && (
-                <div className="mb-4 rounded-xl border border-orange-500/20 bg-orange-500/8 px-4 py-3">
-                  <p className="text-xs text-orange-200/80 leading-relaxed">
-                    Demo mode: lyrics are placeholders. Click{" "}
-                    <span className="font-semibold">Edit lyrics</span> on each song to
-                    paste the real lyrics before downloading.
-                  </p>
-                </div>
-              )}
-
               {counts.total === 0 ? (
                 <div className="rounded-xl border border-white/8 bg-white/[0.02] p-5">
                   <p className="text-sm text-white/55 leading-relaxed">
@@ -526,9 +412,9 @@ export default function Home() {
                     <SongCard
                       key={entry.id}
                       entry={entry}
-                      onSelectCandidate={(songId) => resolveCandidate(entry.id, songId)}
+                      onSelectCandidate={(c) => selectCandidate(entry.id, c)}
                       onPasteLyrics={(lyrics) =>
-                        pasteLyrics(entry.id, entry.query, lyrics)
+                        pasteLyrics(entry.id, entry.query, entry.artist, lyrics)
                       }
                       onRemove={() =>
                         setEntries((prev) => prev.filter((e) => e.id !== entry.id))
@@ -563,9 +449,7 @@ export default function Home() {
                     ? downloadedAt
                       ? "Downloaded. Change settings to regenerate anytime."
                       : "All songs ready."
-                    : busy
-                      ? "Searching lyrics…"
-                      : "Resolve remaining songs to enable download."}
+                    : "Paste lyrics for each song to enable download."}
               </p>
             </div>
 
@@ -588,7 +472,7 @@ export default function Home() {
               </SecondaryButton>
               <PrimaryButton
                 onClick={generatePptx}
-                disabled={!allResolved || busy || counts.total === 0}
+                disabled={!allResolved || counts.total === 0}
                 loading={generating}
                 icon={faFileArrowDown}
                 className="w-full sm:w-auto"

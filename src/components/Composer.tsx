@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPaperPlane, faPlus } from "@fortawesome/free-solid-svg-icons";
-import type { Candidate, SearchResponse } from "@/lib/types";
+import type { Candidate } from "@/lib/types";
 import { searchDemoCatalog } from "@/lib/providers/demoIndex";
 
 const MAX_SUGGESTIONS = 20;
-const IS_STATIC_EXPORT = process.env.NEXT_PUBLIC_STATIC_EXPORT === "true";
 
 interface ComposerProps {
   onAddSong: (title: string) => void;
@@ -24,60 +23,16 @@ export function Composer({
 }: ComposerProps) {
   const [mode, setMode] = useState<"single" | "paste">("single");
   const [value, setValue] = useState("");
-  const [suggestions, setSuggestions] = useState<Candidate[]>([]);
-  const [suggestBusy, setSuggestBusy] = useState(false);
-  const suggestReqId = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const canSuggest = useMemo(
-    () => mode === "single" && value.trim().length >= 2,
-    [mode, value],
-  );
-
-  useEffect(() => {
-    if (!canSuggest || disabled) {
-      setSuggestions([]);
-      setSuggestBusy(false);
-      return;
-    }
-
-    if (IS_STATIC_EXPORT) {
-      setSuggestBusy(false);
-      setSuggestions(
-        searchDemoCatalog(value.trim(), { limit: MAX_SUGGESTIONS, minScore: 0.18 }),
-      );
-      return;
-    }
-
-    const id = ++suggestReqId.current;
-    setSuggestBusy(true);
+  const suggestions = useMemo(() => {
+    if (disabled) return [];
+    if (mode !== "single") return [];
     const q = value.trim();
-
-    const t = window.setTimeout(async () => {
-      try {
-        const res = await fetch("/api/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: q, suggestOnly: true }),
-        });
-        const payload = (await res.json().catch(() => null)) as unknown;
-        if (id !== suggestReqId.current) return;
-        if (!res.ok || !payload || typeof payload !== "object") {
-          setSuggestions([]);
-          return;
-        }
-        const data = payload as SearchResponse;
-        setSuggestions(
-          Array.isArray(data.candidates) ? data.candidates.slice(0, MAX_SUGGESTIONS) : [],
-        );
-      } finally {
-        if (id === suggestReqId.current) setSuggestBusy(false);
-      }
-    }, 220);
-
-    return () => window.clearTimeout(t);
-  }, [canSuggest, disabled, mode, value]);
+    if (q.length < 2) return [];
+    return searchDemoCatalog(q, { limit: MAX_SUGGESTIONS, minScore: 0.18 });
+  }, [disabled, mode, value]);
 
   const handleAdd = () => {
     const trimmed = value.trim();
@@ -124,44 +79,39 @@ export function Composer({
                 className="w-full bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none py-2 px-1 disabled:opacity-40"
               />
 
-              {(suggestBusy || suggestions.length > 0) && (
+              {suggestions.length > 0 && (
                 <div className="mt-2 rounded-xl border border-white/10 bg-black/30 backdrop-blur-xl overflow-hidden">
-                  {suggestBusy && suggestions.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-white/35">Searching…</div>
-                  ) : (
-                    <>
-                      <div className="divide-y divide-white/8 max-h-72 overflow-auto">
-                        {suggestions.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              if (disabled) return;
-                              if (onAddCandidate) onAddCandidate(c);
-                              else onAddSong(c.title);
-                              setValue("");
-                              setSuggestions([]);
-                              inputRef.current?.focus();
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-white/6 transition-colors flex items-center justify-between gap-3 cursor-pointer"
-                          >
-                            <span className="text-xs text-white/80 truncate">
-                              {c.title}
-                              {c.artist ? (
-                                <span className="text-white/35"> • {c.artist}</span>
-                              ) : null}
-                            </span>
-                            <span className="text-[10px] text-white/25 flex-shrink-0">
-                              {Math.round(c.score * 100)}%
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="px-3 py-2 text-[10px] text-white/25 border-t border-white/8">
-                        Showing top {suggestions.length} matches. Keep typing to narrow.
-                      </div>
-                    </>
-                  )}
+                  <>
+                    <div className="divide-y divide-white/8 max-h-72 overflow-auto">
+                      {suggestions.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            if (disabled) return;
+                            if (onAddCandidate) onAddCandidate(c);
+                            else onAddSong(c.title);
+                            setValue("");
+                            inputRef.current?.focus();
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-white/6 transition-colors flex items-center justify-between gap-3 cursor-pointer"
+                        >
+                          <span className="text-xs text-white/80 truncate">
+                            {c.title}
+                            {c.artist ? (
+                              <span className="text-white/35"> • {c.artist}</span>
+                            ) : null}
+                          </span>
+                          <span className="text-[10px] text-white/25 flex-shrink-0">
+                            {Math.round(c.score * 100)}%
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="px-3 py-2 text-[10px] text-white/25 border-t border-white/8">
+                      Showing top {suggestions.length} matches. Keep typing to narrow.
+                    </div>
+                  </>
                 </div>
               )}
             </div>
