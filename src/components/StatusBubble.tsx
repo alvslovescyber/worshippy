@@ -18,10 +18,7 @@ export function StatusBubble({ text, done = false }: StatusBubbleProps) {
       className="flex items-center gap-2.5 py-2"
     >
       {done ? (
-        <FontAwesomeIcon
-          icon={faCheck}
-          className="w-3 h-3 text-emerald-400"
-        />
+        <FontAwesomeIcon icon={faCheck} className="w-3 h-3 text-emerald-400" />
       ) : (
         <FontAwesomeIcon
           icon={faCircleNotch}

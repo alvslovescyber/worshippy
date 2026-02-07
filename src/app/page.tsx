@@ -262,9 +262,7 @@ export default function Home() {
           return addable.length > 0 ? [...prev, ...addable] : prev;
         });
 
-        await Promise.allSettled(
-          entriesToSearch.map((e) => runSearch(e.id, e.query)),
-        );
+        await Promise.allSettled(entriesToSearch.map((e) => runSearch(e.id, e.query)));
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Could not add songs";
         setToast({ visible: true, type: "error", message: msg });
@@ -335,9 +333,7 @@ export default function Home() {
 
       if (!res.ok) {
         const errPayload = (await res.json().catch(() => null)) as unknown;
-        throw new Error(
-          errorPayloadToMessage(errPayload) ?? "Generation failed",
-        );
+        throw new Error(errorPayloadToMessage(errPayload) ?? "Generation failed");
       }
 
       const blob = await res.blob();
@@ -380,58 +376,59 @@ export default function Home() {
                 Worship lyrics decks, done.
               </h1>
               <p className="text-sm md:text-[15px] leading-relaxed text-white/45 max-w-xl">
-                Add songs one-by-one (or paste a set list), resolve any matches,
-                then download a polished editable PowerPoint.
+                Add songs one-by-one (or paste a set list), resolve any matches, then
+                download a polished editable PowerPoint.
               </p>
             </div>
 
-              <Composer
-                onAddSong={addSong}
-                onAddCandidate={(c) => {
-                  const entry: SongEntry = {
-                    id: crypto.randomUUID(),
-                    query: c.title,
-                    status: { phase: "searching" },
-                  };
+            <Composer
+              onAddSong={addSong}
+              onAddCandidate={(c) => {
+                const entry: SongEntry = {
+                  id: crypto.randomUUID(),
+                  query: c.title,
+                  status: { phase: "searching" },
+                };
 
-                  let hitLimit = false;
-                  let didAdd = false;
-                  setEntries((prev) => {
-                    const existing = new Set(prev.map((e) => e.query.toLowerCase()));
-                    if (existing.has(entry.query.toLowerCase())) return prev;
-                    if (prev.length >= 20) {
-                      hitLimit = true;
-                      return prev;
-                    }
-                    didAdd = true;
-                    return [...prev, entry];
-                  });
-
-                  if (hitLimit) {
-                    setToast({
-                      visible: true,
-                      type: "error",
-                      message: "Max 20 songs per set list.",
-                    });
-                    return;
+                let hitLimit = false;
+                let didAdd = false;
+                setEntries((prev) => {
+                  const existing = new Set(prev.map((e) => e.query.toLowerCase()));
+                  if (existing.has(entry.query.toLowerCase())) return prev;
+                  if (prev.length >= 20) {
+                    hitLimit = true;
+                    return prev;
                   }
+                  didAdd = true;
+                  return [...prev, entry];
+                });
 
-                  if (!didAdd) return;
-                  setDownloadedAt(null);
-                  postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
-                    songId: c.id,
-                  })
-                    .then((res) =>
-                      updateEntryStatus(entry.id, { phase: "resolved", song: res.song }),
-                    )
-                    .catch((err: unknown) => {
-                      const msg = err instanceof Error ? err.message : "Could not load lyrics";
-                      updateEntryStatus(entry.id, { phase: "error", message: msg });
-                    });
-                }}
-                onPasteSetList={pasteSetList}
-                disabled={generating}
-              />
+                if (hitLimit) {
+                  setToast({
+                    visible: true,
+                    type: "error",
+                    message: "Max 20 songs per set list.",
+                  });
+                  return;
+                }
+
+                if (!didAdd) return;
+                setDownloadedAt(null);
+                postJson<{ songId: string; song: NormalizedSong }>("/api/lyrics", {
+                  songId: c.id,
+                })
+                  .then((res) =>
+                    updateEntryStatus(entry.id, { phase: "resolved", song: res.song }),
+                  )
+                  .catch((err: unknown) => {
+                    const msg =
+                      err instanceof Error ? err.message : "Could not load lyrics";
+                    updateEntryStatus(entry.id, { phase: "error", message: msg });
+                  });
+              }}
+              onPasteSetList={pasteSetList}
+              disabled={generating}
+            />
 
             <GlassCard noPadding className="p-5">
               <div className="flex items-center justify-between gap-3 mb-4">
@@ -458,8 +455,8 @@ export default function Home() {
                 <div className="mb-4 rounded-xl border border-orange-500/20 bg-orange-500/8 px-4 py-3">
                   <p className="text-xs text-orange-200/80 leading-relaxed">
                     Demo mode: lyrics are placeholders. Click{" "}
-                    <span className="font-semibold">Edit lyrics</span> on each
-                    song to paste the real lyrics before downloading.
+                    <span className="font-semibold">Edit lyrics</span> on each song to
+                    paste the real lyrics before downloading.
                   </p>
                 </div>
               )}
@@ -467,8 +464,7 @@ export default function Home() {
               {counts.total === 0 ? (
                 <div className="rounded-xl border border-white/8 bg-white/[0.02] p-5">
                   <p className="text-sm text-white/55 leading-relaxed">
-                    Try adding:{" "}
-                    <span className="text-white/80">Firm Foundation</span>
+                    Try adding: <span className="text-white/80">Firm Foundation</span>
                   </p>
                 </div>
               ) : (
@@ -477,9 +473,7 @@ export default function Home() {
                     <SongCard
                       key={entry.id}
                       entry={entry}
-                      onSelectCandidate={(songId) =>
-                        resolveCandidate(entry.id, songId)
-                      }
+                      onSelectCandidate={(songId) => resolveCandidate(entry.id, songId)}
                       onPasteLyrics={(lyrics) =>
                         pasteLyrics(entry.id, entry.query, lyrics)
                       }

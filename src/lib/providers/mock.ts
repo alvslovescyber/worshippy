@@ -1,5 +1,6 @@
 import type { Candidate, RawLyrics } from "../types";
 import type { LyricsProvider } from "./interface";
+import { DEMO_SONGS } from "./demoCatalog";
 
 // Note: This app currently ships with a mock provider for local development.
 // Replace `getProvider()` with a real provider when you're ready.
@@ -26,80 +27,79 @@ function s(
   return { id, title, artist, sections };
 }
 
+function slugifyIdPart(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[()'".,]/g, " ")
+    .replace(/[^a-z0-9 ]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 28);
+}
+
+function buildSongId(title: string, artist: string, index: number): string {
+  const t = slugifyIdPart(title) || "song";
+  const a = slugifyIdPart(artist) || "artist";
+  const suffix = String(index + 1).padStart(4, "0");
+  return `${t}-${a}-${suffix}`;
+}
+
 // Song catalog — only metadata, NO lyrics text in source.
 // Lyrics are generated programmatically in getLyrics().
-const CATALOG: MockSongMeta[] = [
-  s("ff-001", "Firm Foundation", "Cody Carnes"),
-  s("tr-002", "Tremble", "Mosaic MSC", [
+const SPECIAL_SECTIONS: Record<string, MockSongMeta["sections"]> = {
+  "tremble|mosaic msc": [
     { label: "Verse 1", lineCount: 4 },
     { label: "Pre-Chorus", lineCount: 2 },
     { label: "Chorus", lineCount: 4 },
     { label: "Verse 2", lineCount: 4 },
     { label: "Bridge", lineCount: 3 },
-  ]),
-  s("gg-003", "Goodness of God", "Bethel Music", [
+  ],
+  "goodness of god|bethel music": [
     { label: "Verse 1", lineCount: 4 },
     { label: "Chorus", lineCount: 4 },
     { label: "Verse 2", lineCount: 4 },
     { label: "Chorus", lineCount: 4 },
     { label: "Bridge", lineCount: 2 },
-  ]),
-  s("bm-004", "Build My Life", "Housefires", [
+  ],
+  "build my life|housefires": [
     { label: "Verse 1", lineCount: 4 },
     { label: "Verse 2", lineCount: 4 },
     { label: "Chorus", lineCount: 4 },
     { label: "Bridge", lineCount: 3 },
-  ]),
-  s("ga-005", "Great Are You Lord", "All Sons and Daughters", [
+  ],
+  "great are you lord|all sons and daughters": [
     { label: "Verse 1", lineCount: 3 },
     { label: "Chorus", lineCount: 4 },
     { label: "Verse 2", lineCount: 3 },
     { label: "Chorus", lineCount: 4 },
     { label: "Bridge", lineCount: 2 },
-  ]),
+  ],
+};
 
-  // Expanded demo catalog (metadata only; lyrics are placeholders).
-  s("wi-006", "Worthy Is The Name", "Elevation Worship"),
-  s("og-007", "Oceans (Where Feet May Fail)", "Hillsong UNITED"),
-  s("wh-008", "What a Beautiful Name", "Hillsong Worship"),
-  s("wg-009", "Way Maker", "Sinach"),
-  s("hg-010", "How Great Is Our God", "Chris Tomlin"),
-  s("hs-011", "How He Loves", "John Mark McMillan"),
-  s("am-012", "Amazing Grace (My Chains Are Gone)", "Chris Tomlin"),
-  s("10-013", "10,000 Reasons (Bless the Lord)", "Matt Redman"),
-  s("cn-014", "Cornerstone", "Hillsong Worship"),
-  s("ks-015", "King of Kings", "Hillsong Worship"),
-  s("lw-016", "Living Hope", "Phil Wickham"),
-  s("rt-017", "Reckless Love", "Cory Asbury"),
-  s("gh-018", "Graves Into Gardens", "Elevation Worship"),
-  s("bc-019", "Battle Belongs", "Phil Wickham"),
-  s("bg-020", "Blessed Be Your Name", "Matt Redman"),
-  s("fv-021", "Forever", "Kari Jobe"),
-  s("hb-022", "Holy Spirit", "Bryan & Katie Torwalt"),
-  s("go-023", "Good Good Father", "Chris Tomlin"),
-  s("sh-024", "Same God", "Elevation Worship"),
-  s("tw-025", "The Way", "Pat Barrett"),
-  s("nw-026", "No Longer Slaves", "Bethel Music"),
-  s("sp-027", "Spirit Break Out", "Kim Walker-Smith"),
-  s("cm-028", "Christ Is Enough", "Hillsong Worship"),
-  s("ps-029", "Praise", "Elevation Worship"),
-  s("is-030", "Is He Worthy", "Andrew Peterson"),
-  s("ot-031", "O Come to the Altar", "Elevation Worship"),
-  s("lp-032", "Lion and the Lamb", "Bethel Music"),
-  s("db-033", "Do It Again", "Elevation Worship"),
-  s("wl-034", "Who You Say I Am", "Hillsong Worship"),
-  s("ns-035", "New Wine", "Hillsong Worship"),
-  s("tg-036", "This Is Amazing Grace", "Phil Wickham"),
-  s("hs-037", "Here Again", "Elevation Worship"),
-  s("sl-038", "So Will I (100 Billion X)", "Hillsong UNITED"),
-  s("gy-039", "Great You Are", "All Sons & Daughters"),
-  s("rn-040", "Raise a Hallelujah", "Bethel Music"),
-  s("wy-041", "Yes I Will", "Vertical Worship"),
-  s("gd-042", "God of Revival", "Bethel Music"),
-  s("lw-043", "Lord I Need You", "Matt Maher"),
-  s("hp-044", "He Will Hold Me Fast", "Ada Ruth Habershon"),
-  s("nb-045", "Nothing Else", "Cody Carnes"),
-];
+function catalogKey(title: string, artist: string): string {
+  return `${normalizeQuery(title)}|${normalizeQuery(artist)}`;
+}
+
+const CATALOG: MockSongMeta[] = (() => {
+  const seen = new Set<string>();
+  const unique = DEMO_SONGS.filter((e) => {
+    const key = catalogKey(e.title, e.artist);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return unique.map((entry, index) => {
+    const key = catalogKey(entry.title, entry.artist);
+    const sections = SPECIAL_SECTIONS[key];
+    return s(
+      buildSongId(entry.title, entry.artist, index),
+      entry.title,
+      entry.artist,
+      sections,
+    );
+  });
+})();
 
 function buildRawText(meta: MockSongMeta): string {
   return meta.sections
@@ -126,6 +126,18 @@ function normalizeQuery(s: string): string {
     .trim();
 }
 
+function tokenize(s: string): string[] {
+  return normalizeQuery(s)
+    .split(" ")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function allTokensPresent(needles: string[], haystack: string): boolean {
+  if (needles.length === 0) return false;
+  return needles.every((t) => haystack.includes(t));
+}
+
 function scoreSong(query: string, song: MockSongMeta): number {
   const q = normalizeQuery(query);
   if (!q) return 0;
@@ -133,6 +145,7 @@ function scoreSong(query: string, song: MockSongMeta): number {
   const title = normalizeQuery(song.title);
   const artist = normalizeQuery(song.artist);
   const hay = `${title} ${artist}`.trim();
+  const tokens = tokenize(q);
 
   if (q === title) return 1;
   if (q === hay) return 1;
@@ -142,10 +155,12 @@ function scoreSong(query: string, song: MockSongMeta): number {
   if (artist.includes(q)) return 0.72;
   if (hay.includes(q)) return 0.7;
 
-  const tokens = q.split(" ").filter(Boolean);
   if (tokens.length === 0) return 0;
+  if (allTokensPresent(tokens, title)) return 0.84;
+  if (allTokensPresent(tokens, hay)) return 0.76;
+
   const hit = tokens.filter((t) => hay.includes(t)).length;
-  return (hit / tokens.length) * 0.65;
+  return (hit / tokens.length) * 0.62;
 }
 
 export class MockProvider implements LyricsProvider {
@@ -155,9 +170,9 @@ export class MockProvider implements LyricsProvider {
       song,
       score: scoreSong(query, song),
     }))
-      .filter((x) => x.score >= 0.3)
+      .filter((x) => x.score >= 0.18)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 12);
+      .slice(0, 80);
 
     return scored.map(({ song, score }) => ({
       id: song.id,

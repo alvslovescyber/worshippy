@@ -41,7 +41,8 @@ function isMetadataLine(line: string): boolean {
   if (lower.startsWith("license #")) return true;
   if (lower.startsWith("©") || lower.startsWith("(c)")) return true;
   if (lower.includes("all rights reserved")) return true;
-  if (lower.includes("www.") || lower.includes("http://") || lower.includes("https://")) return true;
+  if (lower.includes("www.") || lower.includes("http://") || lower.includes("https://"))
+    return true;
   if (lower.startsWith("capo")) return true;
   if (lower.startsWith("key:")) return true;
   if (lower.startsWith("tempo:")) return true;
@@ -127,7 +128,11 @@ function findRepeatedStanzaIndex(stanzas: string[][]): string | null {
   let best: { key: string; count: number } | null = null;
   for (const [key, count] of counts.entries()) {
     if (count < 2) continue;
-    if (!best || count > best.count || (count === best.count && key.length > best.key.length)) {
+    if (
+      !best ||
+      count > best.count ||
+      (count === best.count && key.length > best.key.length)
+    ) {
       best = { key, count };
     }
   }
@@ -175,6 +180,84 @@ function inferChorusSequence(lines: string[]): { start: number; len: number }[] 
   return dedup.map((start) => ({ start, len: best.len }));
 }
 
+function isTrivialLine(normalized: string): boolean {
+  if (!normalized) return true;
+  if (normalized.length < 8) return true;
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (tokens.length <= 2) return true;
+  if (["oh", "yeah", "yes", "no", "amen"].includes(normalized)) return true;
+  if (normalized.startsWith("yeah ")) return true;
+  return false;
+}
+
+function inferChorusByRepeatedLines(lines: string[]): {
+  starts: number[];
+  block: string[];
+} | null {
+  const normalized = lines.map(normalizeForMatch);
+  const freq = new Map<string, number>();
+  for (const n of normalized) {
+    if (isTrivialLine(n)) continue;
+    freq.set(n, (freq.get(n) ?? 0) + 1);
+  }
+
+  const anchors = [...freq.entries()]
+    .filter(([, c]) => c >= 2)
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+    .slice(0, 6)
+    .map(([k]) => k);
+
+  let best: { starts: number[]; block: string[]; score: number } | null = null;
+
+  for (const anchor of anchors) {
+    const starts = normalized
+      .map((n, i) => (n === anchor ? i : -1))
+      .filter((i) => i >= 0);
+
+    if (starts.length < 2) continue;
+
+    const windows = starts.map((s) => {
+      const end = Math.min(lines.length, s + 14);
+      return normalized.slice(s, end);
+    });
+
+    // Build a "common" block from the first window: keep lines that appear in >=2 windows.
+    const firstWin = windows[0] ?? [];
+    const blockNorm: string[] = [];
+    for (const n of firstWin) {
+      if (isTrivialLine(n)) continue;
+      const hits = windows.filter((w) => w.includes(n)).length;
+      if (hits >= 2) blockNorm.push(n);
+      if (blockNorm.length >= 8) break;
+    }
+
+    if (blockNorm.length < 2) continue;
+
+    // Convert block back to original casing using the first occurrence.
+    const firstStart = starts[0]!;
+    const block = blockNorm.map((bn) => {
+      const idx = normalized.indexOf(bn, firstStart);
+      return idx >= 0 ? lines[idx]! : bn;
+    });
+
+    const score = blockNorm.length * starts.length;
+    if (!best || score > best.score) best = { starts, block, score };
+  }
+
+  return best ? { starts: best.starts, block: best.block } : null;
+}
+
+function chunkIntoVerses(lines: string[], chunkSize: number): string {
+  const chunks: string[][] = [];
+  for (let i = 0; i < lines.length; i += chunkSize) {
+    const chunk = lines.slice(i, i + chunkSize).filter((l) => l.trim() !== "");
+    if (chunk.length > 0) chunks.push(chunk);
+  }
+  return chunks
+    .map((c, idx) => `[${toVerseLabel(idx + 1)}]\n${c.join("\n")}`)
+    .join("\n\n");
+}
+
 export function autoFormatLyricsForEditor(raw: string): string {
   const lines = cleanLines(raw);
   const hasHeaders = lines.some((l) => parseHeaderLabel(l) !== null);
@@ -189,21 +272,41 @@ export function autoFormatLyricsForEditor(raw: string): string {
 
       const chorusCount = stanzas.filter(isChorus).length;
       const lastChorusIdx = chorusKey
-        ? stanzas.map((s, i) => (isChorus(s) ? i : -1)).filter((i) => i >= 0).pop() ?? -1
+        ? (stanzas
+            .map((s, i) => (isChorus(s) ? i : -1))
+            .filter((i) => i >= 0)
+            .pop() ?? -1)
         : -1;
 
       let verseNum = 1;
       const formatted = stanzas.map((stanza, idx) => {
         if (isChorus(stanza)) return `[Chorus]\n${stanza.join("\n")}`;
-        if (chorusCount >= 2 && idx > lastChorusIdx) return `[Bridge]\n${stanza.join("\n")}`;
+        if (chorusCount >= 2 && idx > lastChorusIdx)
+          return `[Bridge]\n${stanza.join("\n")}`;
         return `[${toVerseLabel(verseNum++)}]\n${stanza.join("\n")}`;
       });
       return formatted.join("\n\n");
     }
 
     const one = stanzas[0] ?? [];
-    const chorusSpans = inferChorusSequence(one);
+    let chorusSpans = inferChorusSequence(one);
+
+    // Fallback when exact repeated sequences don't match (common with web pastes).
+    // Try to infer a chorus using repeated lines as an anchor.
     if (chorusSpans.length === 0) {
+      const inferred = inferChorusByRepeatedLines(one);
+      if (inferred) {
+        chorusSpans = inferred.starts.map((start) => ({
+          start,
+          len: inferred.block.length,
+        }));
+      }
+    }
+
+    // Last resort: if it’s still one huge block, split into multiple verses.
+    if (chorusSpans.length === 0) {
+      if (one.length >= 18) return chunkIntoVerses(one, 8);
+      if (one.length >= 12) return chunkIntoVerses(one, 6);
       return `[${toVerseLabel(1)}]\n${one.join("\n")}`;
     }
 
@@ -213,7 +316,8 @@ export function autoFormatLyricsForEditor(raw: string): string {
     const chorusCount = spans.length;
 
     // Collect non-chorus segments between chorus repeats.
-    const segments: { lines: string[]; position: "pre" | "mid" | "tail"; idx: number }[] = [];
+    const segments: { lines: string[]; position: "pre" | "mid" | "tail"; idx: number }[] =
+      [];
     let cursor = 0;
     for (let sIdx = 0; sIdx < spans.length; sIdx++) {
       const span = spans[sIdx]!;
@@ -232,7 +336,8 @@ export function autoFormatLyricsForEditor(raw: string): string {
     }
 
     const tail = one.slice(cursor).filter((l) => l.trim() !== "");
-    if (tail.length > 0) segments.push({ lines: tail, position: "tail", idx: spans.length });
+    if (tail.length > 0)
+      segments.push({ lines: tail, position: "tail", idx: spans.length });
 
     // Decide which segment is "Bridge" (best-effort): typically after Chorus 2.
     let bridgeSegment: { idx: number } | null = null;
@@ -245,7 +350,8 @@ export function autoFormatLyricsForEditor(raw: string): string {
         let bestI = -1;
         let bestLen = 0;
         segments.forEach((s, i) => {
-          const afterSecondChorus = s.position === "tail" || (s.position === "mid" && s.idx >= 2);
+          const afterSecondChorus =
+            s.position === "tail" || (s.position === "mid" && s.idx >= 2);
           if (!afterSecondChorus) return;
           if (s.lines.length > bestLen) {
             bestLen = s.lines.length;
@@ -312,7 +418,5 @@ export function autoFormatLyricsForEditor(raw: string): string {
   }
   if (label && buf.length > 0) sections.push({ label, lines: buf });
 
-  return sections
-    .map((s) => `[${s.label}]\n${s.lines.join("\n")}`)
-    .join("\n\n");
+  return sections.map((s) => `[${s.label}]\n${s.lines.join("\n")}`).join("\n\n");
 }

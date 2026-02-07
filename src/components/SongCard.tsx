@@ -52,9 +52,7 @@ export function SongCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5">
             <StatusIcon status={status} />
-            <h3 className="text-sm font-semibold text-white truncate">
-              {query}
-            </h3>
+            <h3 className="text-sm font-semibold text-white truncate">{query}</h3>
           </div>
           <StatusLabel status={status} />
 
@@ -70,9 +68,7 @@ export function SongCard({
                   className={`w-2.5 h-2.5 transition-transform ${showDropdown ? "rotate-180" : ""}`}
                 />
                 Choose a match{" "}
-                <span className="text-white/30">
-                  ({status.candidates.length})
-                </span>
+                <span className="text-white/30">({status.candidates.length})</span>
               </button>
               {showDropdown && (
                 <motion.div
@@ -89,9 +85,7 @@ export function SongCard({
                       <span className="text-white/80">
                         {c.title}
                         {c.artist && (
-                          <span className="text-white/40 ml-1.5">
-                            {c.artist}
-                          </span>
+                          <span className="text-white/40 ml-1.5">{c.artist}</span>
                         )}
                         {c.score >= 0.95 && (
                           <span className="ml-2 text-[10px] font-semibold text-orange-300/80 border border-orange-500/20 bg-orange-500/10 px-1.5 py-0.5 rounded-full">
@@ -145,10 +139,7 @@ export function SongCard({
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-white/60 hover:bg-white/8 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center gap-2"
                       title="Cleans up formatting and organizes sections"
                     >
-                      <FontAwesomeIcon
-                        icon={faWandMagicSparkles}
-                        className="w-3 h-3"
-                      />
+                      <FontAwesomeIcon icon={faWandMagicSparkles} className="w-3 h-3" />
                       Auto-format
                     </button>
                     <button
@@ -174,8 +165,8 @@ export function SongCard({
                     </button>
                   </div>
                   <p className="text-[11px] text-white/30 leading-relaxed">
-                    Auto-format is best-effort. It may misidentify Chorus/Bridge
-                    or miss section breaks — review and edit labels as needed.
+                    Auto-format is best-effort. It may misidentify Chorus/Bridge or miss
+                    section breaks — review and edit labels as needed.
                   </p>
                 </div>
               )}
@@ -210,25 +201,12 @@ function StatusIcon({ status }: { status: SongEntry["status"] }) {
       );
     case "candidates":
       return (
-        <FontAwesomeIcon
-          icon={faMagnifyingGlass}
-          className="w-3.5 h-3.5 text-blue-400"
-        />
+        <FontAwesomeIcon icon={faMagnifyingGlass} className="w-3.5 h-3.5 text-blue-400" />
       );
     case "resolved":
-      return (
-        <FontAwesomeIcon
-          icon={faCheck}
-          className="w-3.5 h-3.5 text-emerald-400"
-        />
-      );
+      return <FontAwesomeIcon icon={faCheck} className="w-3.5 h-3.5 text-emerald-400" />;
     case "manual":
-      return (
-        <FontAwesomeIcon
-          icon={faPaste}
-          className="w-3.5 h-3.5 text-yellow-400"
-        />
-      );
+      return <FontAwesomeIcon icon={faPaste} className="w-3.5 h-3.5 text-yellow-400" />;
     case "error":
       return (
         <FontAwesomeIcon

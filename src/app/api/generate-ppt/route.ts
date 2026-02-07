@@ -9,9 +9,7 @@ const schema = z.object({
     z.object({
       title: z.string(),
       artist: z.string().optional(),
-      sections: z.array(
-        z.object({ label: z.string(), lines: z.array(z.string()) }),
-      ),
+      sections: z.array(z.object({ label: z.string(), lines: z.array(z.string()) })),
     }),
   ),
   settings: z.object({

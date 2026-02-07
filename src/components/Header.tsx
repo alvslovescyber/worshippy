@@ -15,9 +15,12 @@ export function Header({ onSettingsToggle }: HeaderProps) {
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.3)]">
             <FontAwesomeIcon icon={faMusic} className="w-3.5 h-3.5 text-white" />
           </div>
-          <span className="text-base font-bold tracking-tight text-white">
-            Worshippy
-          </span>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-base font-bold tracking-tight text-white">
+              Worshippy
+            </span>
+            <span className="text-xs text-white/35 truncate">developed by Alvis</span>
+          </div>
         </div>
         <button
           onClick={onSettingsToggle}

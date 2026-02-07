@@ -31,9 +31,7 @@ export function Toast({ message, type, visible, onClose }: ToastProps) {
         >
           <div
             className={`glass rounded-xl px-4 py-3 flex items-center gap-3 shadow-2xl ${
-              type === "success"
-                ? "border-emerald-500/20"
-                : "border-red-500/20"
+              type === "success" ? "border-emerald-500/20" : "border-red-500/20"
             }`}
           >
             <FontAwesomeIcon

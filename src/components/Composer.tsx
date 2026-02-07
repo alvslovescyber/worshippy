@@ -5,6 +5,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPaperPlane, faPlus } from "@fortawesome/free-solid-svg-icons";
 import type { Candidate, SearchResponse } from "@/lib/types";
 
+const MAX_SUGGESTIONS = 20;
+
 interface ComposerProps {
   onAddSong: (title: string) => void;
   onAddCandidate?: (candidate: Candidate) => void;
@@ -26,7 +28,10 @@ export function Composer({
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const canSuggest = useMemo(() => mode === "single" && value.trim().length >= 2, [mode, value]);
+  const canSuggest = useMemo(
+    () => mode === "single" && value.trim().length >= 2,
+    [mode, value],
+  );
 
   useEffect(() => {
     if (!canSuggest || disabled) {
@@ -53,7 +58,9 @@ export function Composer({
           return;
         }
         const data = payload as SearchResponse;
-        setSuggestions(Array.isArray(data.candidates) ? data.candidates.slice(0, 8) : []);
+        setSuggestions(
+          Array.isArray(data.candidates) ? data.candidates.slice(0, MAX_SUGGESTIONS) : [],
+        );
       } finally {
         if (id === suggestReqId.current) setSuggestBusy(false);
       }
@@ -112,33 +119,38 @@ export function Composer({
                   {suggestBusy && suggestions.length === 0 ? (
                     <div className="px-3 py-2 text-xs text-white/35">Searching…</div>
                   ) : (
-                    <div className="divide-y divide-white/8">
-                      {suggestions.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            if (disabled) return;
-                            if (onAddCandidate) onAddCandidate(c);
-                            else onAddSong(c.title);
-                            setValue("");
-                            setSuggestions([]);
-                            inputRef.current?.focus();
-                          }}
-                          className="w-full text-left px-3 py-2 hover:bg-white/6 transition-colors flex items-center justify-between gap-3 cursor-pointer"
-                        >
-                          <span className="text-xs text-white/80 truncate">
-                            {c.title}
-                            {c.artist ? (
-                              <span className="text-white/35"> • {c.artist}</span>
-                            ) : null}
-                          </span>
-                          <span className="text-[10px] text-white/25 flex-shrink-0">
-                            {Math.round(c.score * 100)}%
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="divide-y divide-white/8 max-h-72 overflow-auto">
+                        {suggestions.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              if (disabled) return;
+                              if (onAddCandidate) onAddCandidate(c);
+                              else onAddSong(c.title);
+                              setValue("");
+                              setSuggestions([]);
+                              inputRef.current?.focus();
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-white/6 transition-colors flex items-center justify-between gap-3 cursor-pointer"
+                          >
+                            <span className="text-xs text-white/80 truncate">
+                              {c.title}
+                              {c.artist ? (
+                                <span className="text-white/35"> • {c.artist}</span>
+                              ) : null}
+                            </span>
+                            <span className="text-[10px] text-white/25 flex-shrink-0">
+                              {Math.round(c.score * 100)}%
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="px-3 py-2 text-[10px] text-white/25 border-t border-white/8">
+                        Showing top {suggestions.length} matches. Keep typing to narrow.
+                      </div>
+                    </>
                   )}
                 </div>
               )}
@@ -162,9 +174,7 @@ export function Composer({
             </button>
           </div>
           <div className="flex items-center justify-between mt-1.5 px-1">
-            <p className="text-[11px] text-white/25">
-              Press Enter to add.
-            </p>
+            <p className="text-[11px] text-white/25">Press Enter to add.</p>
             <button
               type="button"
               onClick={() => {

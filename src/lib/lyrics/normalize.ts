@@ -67,8 +67,7 @@ export function normalizeLyrics(raw: RawLyrics): NormalizedSong {
     return {
       title: raw.title,
       artist: raw.artist,
-      sections:
-        cleaned.length > 0 ? [{ label: toVerseLabel(1), lines: cleaned }] : [],
+      sections: cleaned.length > 0 ? [{ label: toVerseLabel(1), lines: cleaned }] : [],
     };
   }
 
