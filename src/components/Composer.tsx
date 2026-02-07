@@ -31,7 +31,8 @@ export function Composer({
     if (mode !== "single") return [];
     const q = value.trim();
     if (q.length < 2) return [];
-    return searchDemoCatalog(q, { limit: MAX_SUGGESTIONS, minScore: 0.18 });
+    // Keep suggestions high-signal so they don't fight "Add as typed".
+    return searchDemoCatalog(q, { limit: MAX_SUGGESTIONS, minScore: 0.3 });
   }, [disabled, mode, value]);
 
   const handleAdd = () => {
@@ -109,7 +110,7 @@ export function Composer({
                       ))}
                     </div>
                     <div className="px-3 py-2 text-[10px] text-white/25 border-t border-white/8">
-                      Showing top {suggestions.length} matches. Keep typing to narrow.
+                      Tip: click a match, or press Add to use your typed title.
                     </div>
                   </>
                 </div>

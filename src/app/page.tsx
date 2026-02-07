@@ -28,6 +28,7 @@ import { normalizeLyrics } from "@/lib/lyrics/normalize";
 import { searchDemoCatalog } from "@/lib/providers/demoIndex";
 import { splitIntoSlides } from "@/lib/lyrics/split";
 import { buildPptx } from "@/lib/pptx/builder";
+import { normalizeTitleKey } from "@/lib/lyrics/bulk";
 
 type ToastState =
   | { visible: false; message: ""; type: "success" | "error" }
@@ -56,15 +57,6 @@ function parseTitlesLocal(input: string): ParseTitlesResponse {
   }
 
   return { titles };
-}
-
-function shouldAutoSelect(candidates: Candidate[]): boolean {
-  if (candidates.length === 1) return true;
-  if (candidates.length === 0) return false;
-  const top = candidates[0];
-  const second = candidates[1];
-  if (!top || !second) return true;
-  return top.score >= 0.95 && top.score - second.score >= 0.2;
 }
 
 export default function Home() {
@@ -183,21 +175,32 @@ export default function Home() {
       return { phase: "manual" as const, query, artist: undefined as string | undefined };
     }
 
-    if (shouldAutoSelect(candidates)) {
-      const top = candidates[0];
+    const top = candidates[0];
+    const strong = candidates.filter((c) => c.score >= 0.6).slice(0, 10);
+    const qKey = normalizeTitleKey(query);
+    const topKey = top ? normalizeTitleKey(top.title) : "";
+
+    // Only "auto-correct" the title when it's effectively an exact match.
+    if (top && top.score >= 0.9 && qKey === topKey) {
       return {
         phase: "manual" as const,
-        query: top?.title ?? query,
-        artist: top?.artist,
+        query: top.title,
+        artist: top.artist,
       };
     }
 
-    return {
-      phase: "candidates" as const,
-      candidates,
-      query,
-      artist: undefined as string | undefined,
-    };
+    // Offer selection only when there are multiple strong candidates.
+    if (strong.length >= 2) {
+      return {
+        phase: "candidates" as const,
+        candidates: strong,
+        query,
+        artist: undefined as string | undefined,
+      };
+    }
+
+    // Default: always allow "manual" with the user's typed title.
+    return { phase: "manual" as const, query, artist: undefined as string | undefined };
   }, []);
 
   const addSong = useCallback(
@@ -219,10 +222,14 @@ export default function Home() {
 
       let didAdd = false;
       let hitLimit = false;
+      let duplicate = false;
 
       setEntries((prev) => {
         const existing = new Set(prev.map((e) => e.query.toLowerCase()));
-        if (existing.has(entry.query.toLowerCase())) return prev;
+        if (existing.has(entry.query.toLowerCase())) {
+          duplicate = true;
+          return prev;
+        }
         if (prev.length >= 20) {
           hitLimit = true;
           return prev;
@@ -236,6 +243,15 @@ export default function Home() {
           visible: true,
           type: "error",
           message: "Max 20 songs per set list.",
+        });
+        return;
+      }
+
+      if (duplicate) {
+        setToast({
+          visible: true,
+          type: "error",
+          message: "That song is already in your set list.",
         });
         return;
       }
@@ -441,9 +457,13 @@ export default function Home() {
 
                 let hitLimit = false;
                 let didAdd = false;
+                let duplicate = false;
                 setEntries((prev) => {
                   const existing = new Set(prev.map((e) => e.query.toLowerCase()));
-                  if (existing.has(entry.query.toLowerCase())) return prev;
+                  if (existing.has(entry.query.toLowerCase())) {
+                    duplicate = true;
+                    return prev;
+                  }
                   if (prev.length >= 20) {
                     hitLimit = true;
                     return prev;
@@ -457,6 +477,15 @@ export default function Home() {
                     visible: true,
                     type: "error",
                     message: "Max 20 songs per set list.",
+                  });
+                  return;
+                }
+
+                if (duplicate) {
+                  setToast({
+                    visible: true,
+                    type: "error",
+                    message: "That song is already in your set list.",
                   });
                   return;
                 }
