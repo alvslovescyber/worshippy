@@ -66,12 +66,20 @@ export interface GenerateSettings {
   showSectionLabels: boolean;
   theme: "dark" | "light";
   backgroundImage?: string; // base64 data URL
+  fontFace?: "Calibri" | "Aptos" | "Arial";
+  lyricsTextSize?: "sm" | "md" | "lg";
+  lyricsTextColor?: "default" | "soft" | "pure";
+  lyricsTextMargin?: "normal" | "wide";
 }
 
 export const DEFAULT_SETTINGS: GenerateSettings = {
   linesPerSlide: 3,
   showSectionLabels: false,
   theme: "dark",
+  fontFace: "Calibri",
+  lyricsTextSize: "md",
+  lyricsTextColor: "soft",
+  lyricsTextMargin: "normal",
 };
 
 // ─── API payloads ───

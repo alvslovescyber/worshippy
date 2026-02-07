@@ -119,6 +119,133 @@ export function SettingsPanel({
                 />
               </button>
             </div>
+
+            <div className="mt-7 pt-6 border-t border-white/8">
+              <h3 className="text-xs font-semibold text-white/65 tracking-tight mb-4">
+                Text styling
+              </h3>
+
+              {/* Font */}
+              <div className="mb-5">
+                <label className="text-xs font-medium text-white/50 mb-2.5 block">
+                  Font
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["Calibri", "Aptos", "Arial"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => update({ fontFace: f })}
+                      className={`
+                        py-2 rounded-lg text-[11px] font-semibold transition-all duration-200 cursor-pointer
+                        ${
+                          lockedSettings.fontFace === f
+                            ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                            : "bg-white/5 text-white/45 border border-white/8 hover:bg-white/8"
+                        }
+                      `}
+                      style={{ fontFamily: f }}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-white/30 leading-relaxed">
+                  PowerPoint will substitute if a font isn’t installed.
+                </p>
+              </div>
+
+              {/* Lyrics size */}
+              <div className="mb-5">
+                <label className="text-xs font-medium text-white/50 mb-2.5 block">
+                  Lyrics size
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { key: "sm" as const, label: "Small" },
+                      { key: "md" as const, label: "Medium" },
+                      { key: "lg" as const, label: "Large" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => update({ lyricsTextSize: opt.key })}
+                      className={`
+                        py-2 rounded-lg text-[11px] font-semibold transition-all duration-200 cursor-pointer
+                        ${
+                          lockedSettings.lyricsTextSize === opt.key
+                            ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                            : "bg-white/5 text-white/45 border border-white/8 hover:bg-white/8"
+                        }
+                      `}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lyrics color */}
+              <div className="mb-5">
+                <label className="text-xs font-medium text-white/50 mb-2.5 block">
+                  Lyrics color
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { key: "default" as const, label: "Theme" },
+                      { key: "soft" as const, label: "Soft" },
+                      { key: "pure" as const, label: "Pure" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => update({ lyricsTextColor: opt.key })}
+                      className={`
+                        py-2 rounded-lg text-[11px] font-semibold transition-all duration-200 cursor-pointer
+                        ${
+                          lockedSettings.lyricsTextColor === opt.key
+                            ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                            : "bg-white/5 text-white/45 border border-white/8 hover:bg-white/8"
+                        }
+                      `}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lyrics margins */}
+              <div className="mb-1">
+                <label className="text-xs font-medium text-white/50 mb-2.5 block">
+                  Side margins
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { key: "normal" as const, label: "Normal" },
+                      { key: "wide" as const, label: "Wide" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => update({ lyricsTextMargin: opt.key })}
+                      className={`
+                        py-2 rounded-lg text-[11px] font-semibold transition-all duration-200 cursor-pointer
+                        ${
+                          lockedSettings.lyricsTextMargin === opt.key
+                            ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                            : "bg-white/5 text-white/45 border border-white/8 hover:bg-white/8"
+                        }
+                      `}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </motion.div>
         </>
       )}

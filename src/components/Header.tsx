@@ -16,17 +16,14 @@ export function Header({ onSettingsToggle }: HeaderProps) {
             <FontAwesomeIcon icon={faMusic} className="w-3.5 h-3.5 text-white" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
               <span className="text-[15px] font-semibold tracking-tight text-white">
                 Worshippy
               </span>
-              <span className="hidden sm:inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] tracking-wide text-white/45 truncate">
+              <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] tracking-wide text-white/45 truncate">
                 Developed by Alvis
               </span>
             </div>
-            <span className="sm:hidden block text-[11px] text-white/35 leading-tight truncate">
-              Developed by Alvis
-            </span>
           </div>
         </div>
         <button

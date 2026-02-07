@@ -94,7 +94,10 @@ export default function Home() {
         setEditingId(firstNeedingLyrics?.id ?? null);
       }
       if (savedSettings && typeof savedSettings === "object") {
-        setSettings(savedSettings as GenerateSettings);
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...(savedSettings as Partial<GenerateSettings>),
+        });
       }
       setToast({
         visible: true,

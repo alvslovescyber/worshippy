@@ -53,7 +53,6 @@ function isMetadataLine(line: string): boolean {
 function looksLikeChordsOnly(line: string): boolean {
   const t = line.trim();
   if (!t) return false;
-  if (/[a-z]/.test(t)) return false;
   const tokens = t
     .replace(/[|()[\],]/g, " ")
     .split(/\s+/)

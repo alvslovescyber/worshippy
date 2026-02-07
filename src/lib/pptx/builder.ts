@@ -5,12 +5,38 @@ import type { SlideContent, GenerateSettings } from "@/lib/types";
 // `LAYOUT_WIDE` is 13.333" × 7.5" (16:9 widescreen).
 const SLIDE_W = 13.333;
 const SLIDE_H = 7.5;
-const MARGIN = 1.0;
+const BASE_MARGIN = 1.0;
 
 function lyricsFontSize(base: number, linesPerSlide: 2 | 3 | 4): number {
   if (linesPerSlide === 2) return base + 6;
   if (linesPerSlide === 4) return base - 4;
   return base;
+}
+
+function sizeDelta(size: GenerateSettings["lyricsTextSize"]): number {
+  switch (size) {
+    case "sm":
+      return -4;
+    case "lg":
+      return 4;
+    case "md":
+    default:
+      return 0;
+  }
+}
+
+function lyricsColor(
+  themeTextColor: string,
+  choice: GenerateSettings["lyricsTextColor"],
+) {
+  if (choice === "pure") return "FFFFFF";
+  if (choice === "soft") return "F3F4F6";
+  return themeTextColor;
+}
+
+function marginForLyrics(choice: GenerateSettings["lyricsTextMargin"]): number {
+  if (choice === "wide") return 1.35;
+  return BASE_MARGIN;
 }
 
 export async function buildPptx(
@@ -21,10 +47,16 @@ export async function buildPptx(
   pres.layout = "LAYOUT_WIDE";
 
   const theme = getTheme(settings.theme);
+  const fontFace = settings.fontFace ?? theme.fontFace;
   pres.theme = {
-    headFontFace: theme.fontFace,
-    bodyFontFace: theme.fontFace,
+    headFontFace: fontFace,
+    bodyFontFace: fontFace,
   };
+
+  const titleTextColor = theme.textColor;
+  const subtitleColor = theme.subtitleColor;
+  const lyricTextColor = lyricsColor(theme.textColor, settings.lyricsTextColor);
+  const lyricsMargin = marginForLyrics(settings.lyricsTextMargin);
 
   for (const sc of slides) {
     const slide = pres.addSlide();
@@ -39,71 +71,71 @@ export async function buildPptx(
     switch (sc.type) {
       case "cover":
         slide.addText(sc.title ?? "Worship Set", {
-          x: MARGIN,
+          x: BASE_MARGIN,
           y: SLIDE_H * 0.33,
-          w: SLIDE_W - MARGIN * 2,
+          w: SLIDE_W - BASE_MARGIN * 2,
           h: 1,
           fontSize: theme.titleFontSize,
-          fontFace: theme.fontFace,
-          color: theme.textColor,
+          fontFace,
+          color: titleTextColor,
           align: "center",
           bold: true,
         });
         if (sc.date) {
           slide.addText(sc.date, {
-            x: MARGIN,
+            x: BASE_MARGIN,
             y: SLIDE_H * 0.33 + 1.15,
-            w: SLIDE_W - MARGIN * 2,
+            w: SLIDE_W - BASE_MARGIN * 2,
             h: 0.5,
             fontSize: theme.subtitleFontSize,
-            fontFace: theme.fontFace,
-            color: theme.subtitleColor,
+            fontFace,
+            color: subtitleColor,
             align: "center",
           });
         }
         slide.addText("Worshippy", {
-          x: MARGIN,
-          y: SLIDE_H - MARGIN - 0.4,
-          w: SLIDE_W - MARGIN * 2,
+          x: BASE_MARGIN,
+          y: SLIDE_H - BASE_MARGIN - 0.4,
+          w: SLIDE_W - BASE_MARGIN * 2,
           h: 0.35,
           fontSize: 12,
-          fontFace: theme.fontFace,
-          color: theme.subtitleColor,
+          fontFace,
+          color: subtitleColor,
           align: "center",
         });
         slide.addText("Developed by Alvis", {
-          x: MARGIN,
-          y: SLIDE_H - MARGIN - 0.15,
-          w: SLIDE_W - MARGIN * 2,
+          x: BASE_MARGIN,
+          y: SLIDE_H - BASE_MARGIN - 0.15,
+          w: SLIDE_W - BASE_MARGIN * 2,
           h: 0.35,
           fontSize: 11,
-          fontFace: theme.fontFace,
-          color: theme.subtitleColor,
+          fontFace,
+          color: subtitleColor,
           align: "center",
         });
         break;
 
       case "title":
         slide.addText(sc.title ?? "", {
-          x: MARGIN,
+          x: BASE_MARGIN,
           y: SLIDE_H * 0.35,
-          w: SLIDE_W - MARGIN * 2,
+          w: SLIDE_W - BASE_MARGIN * 2,
           h: 1,
           fontSize: theme.titleFontSize,
-          fontFace: theme.fontFace,
-          color: theme.textColor,
+          fontFace,
+          color: titleTextColor,
           align: "center",
           bold: true,
         });
         if (sc.artist) {
           slide.addText(sc.artist, {
-            x: MARGIN,
+            x: BASE_MARGIN,
             y: SLIDE_H * 0.35 + 1.15,
-            w: SLIDE_W - MARGIN * 2,
+            w: SLIDE_W - BASE_MARGIN * 2,
             h: 0.5,
             fontSize: theme.subtitleFontSize,
-            fontFace: theme.fontFace,
-            color: theme.subtitleColor,
+            fontFace,
+            color: subtitleColor,
             align: "center",
           });
         }
@@ -118,9 +150,9 @@ export async function buildPptx(
         break;
 
       case "lyrics": {
-        const x = MARGIN;
-        const w = SLIDE_W - MARGIN * 2;
-        let y = MARGIN;
+        const x = lyricsMargin;
+        const w = SLIDE_W - lyricsMargin * 2;
+        let y = lyricsMargin;
 
         if (sc.sectionLabel) {
           slide.addText(sc.sectionLabel, {
@@ -129,7 +161,7 @@ export async function buildPptx(
             w,
             h: 0.4,
             fontSize: 14,
-            fontFace: theme.fontFace,
+            fontFace,
             color: theme.accentColor,
             align: "center",
             italic: true,
@@ -143,10 +175,12 @@ export async function buildPptx(
           x,
           y,
           w,
-          h: SLIDE_H - y - MARGIN,
-          fontSize: lyricsFontSize(theme.lyricsFontSize, settings.linesPerSlide),
-          fontFace: theme.fontFace,
-          color: theme.textColor,
+          h: SLIDE_H - y - lyricsMargin,
+          fontSize:
+            lyricsFontSize(theme.lyricsFontSize, settings.linesPerSlide) +
+            sizeDelta(settings.lyricsTextSize),
+          fontFace,
+          color: lyricTextColor,
           align: "center",
           valign: "middle",
           lineSpacingMultiple: 1.3,
