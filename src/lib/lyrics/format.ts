@@ -208,21 +208,89 @@ export function autoFormatLyricsForEditor(raw: string): string {
     }
 
     const out: { label: SongSectionLabel; lines: string[] }[] = [];
-    let verseNum = 1;
-    let i = 0;
 
-    for (const span of chorusSpans) {
-      if (span.start > i) {
-        const chunk = one.slice(i, span.start).filter((l) => l.trim() !== "");
-        if (chunk.length > 0) out.push({ label: toVerseLabel(verseNum++), lines: chunk });
+    const spans = [...chorusSpans].sort((a, b) => a.start - b.start);
+    const chorusCount = spans.length;
+
+    // Collect non-chorus segments between chorus repeats.
+    const segments: { lines: string[]; position: "pre" | "mid" | "tail"; idx: number }[] = [];
+    let cursor = 0;
+    for (let sIdx = 0; sIdx < spans.length; sIdx++) {
+      const span = spans[sIdx]!;
+      const chunk = one.slice(cursor, span.start).filter((l) => l.trim() !== "");
+      if (chunk.length > 0) {
+        segments.push({
+          lines: chunk,
+          position: cursor === 0 ? "pre" : "mid",
+          idx: sIdx,
+        });
       }
+
       const chorusLines = one.slice(span.start, span.start + span.len);
       out.push({ label: "Chorus", lines: chorusLines });
-      i = span.start + span.len;
+      cursor = span.start + span.len;
     }
 
-    const tail = one.slice(i).filter((l) => l.trim() !== "");
-    if (tail.length > 0) out.push({ label: toVerseLabel(verseNum), lines: tail });
+    const tail = one.slice(cursor).filter((l) => l.trim() !== "");
+    if (tail.length > 0) segments.push({ lines: tail, position: "tail", idx: spans.length });
+
+    // Decide which segment is "Bridge" (best-effort): typically after Chorus 2.
+    let bridgeSegment: { idx: number } | null = null;
+    if (chorusCount >= 3) {
+      // Prefer the segment between chorus #2 and #3 if it exists.
+      const between2and3 = segments.find((s) => s.position === "mid" && s.idx === 2);
+      if (between2and3) bridgeSegment = { idx: segments.indexOf(between2and3) };
+      else {
+        // Fallback: longest mid/tail segment after chorus #2.
+        let bestI = -1;
+        let bestLen = 0;
+        segments.forEach((s, i) => {
+          const afterSecondChorus = s.position === "tail" || (s.position === "mid" && s.idx >= 2);
+          if (!afterSecondChorus) return;
+          if (s.lines.length > bestLen) {
+            bestLen = s.lines.length;
+            bestI = i;
+          }
+        });
+        if (bestI >= 0) bridgeSegment = { idx: bestI };
+      }
+    } else if (chorusCount === 2 && segments.length > 0) {
+      // If there are only two choruses, the tail is often bridge/tag/outro.
+      const tailSeg = segments.find((s) => s.position === "tail");
+      if (tailSeg) bridgeSegment = { idx: segments.indexOf(tailSeg) };
+    }
+
+    // Re-build in order: segment -> chorus -> segment -> chorus...
+    out.length = 0;
+    let verseNum = 1;
+    cursor = 0;
+    for (let sIdx = 0; sIdx < spans.length; sIdx++) {
+      const span = spans[sIdx]!;
+      const chunk = one.slice(cursor, span.start).filter((l) => l.trim() !== "");
+      if (chunk.length > 0) {
+        const isBridge =
+          bridgeSegment &&
+          segments[bridgeSegment.idx] &&
+          segments[bridgeSegment.idx]!.lines.join("\n") === chunk.join("\n");
+        out.push({
+          label: isBridge ? "Bridge" : toVerseLabel(verseNum++),
+          lines: chunk,
+        });
+      }
+      out.push({ label: "Chorus", lines: one.slice(span.start, span.start + span.len) });
+      cursor = span.start + span.len;
+    }
+    const tailChunk = one.slice(cursor).filter((l) => l.trim() !== "");
+    if (tailChunk.length > 0) {
+      const isBridge =
+        bridgeSegment &&
+        segments[bridgeSegment.idx] &&
+        segments[bridgeSegment.idx]!.lines.join("\n") === tailChunk.join("\n");
+      out.push({
+        label: isBridge ? "Bridge" : toVerseLabel(verseNum),
+        lines: tailChunk,
+      });
+    }
 
     return out.map((s) => `[${s.label}]\n${s.lines.join("\n")}`).join("\n\n");
   }

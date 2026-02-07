@@ -128,13 +128,15 @@ export function SongCard({
                 </button>
               ) : (
                 <div className="space-y-2">
-                  <textarea
-                    value={pasteText}
-                    onChange={(e) => setPasteText(e.target.value)}
-                    placeholder={`Paste lyrics for "${query}" here...\nUse [Verse 1], [Chorus], etc. for sections`}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white/80 placeholder:text-white/25 resize-none focus:outline-none focus:border-orange-500/50 min-h-[80px]"
-                    rows={4}
-                  />
+                  <div className="rounded-xl border border-white/8 bg-black/20">
+                    <textarea
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value)}
+                      placeholder={`Paste lyrics for "${query}" here...\nAdd section headers like [Verse 1], [Chorus], [Bridge] for best results.`}
+                      className="w-full bg-transparent border-0 rounded-xl px-3 py-3 text-xs text-white/85 placeholder:text-white/25 resize-none focus:outline-none min-h-[110px] leading-relaxed"
+                      rows={6}
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -151,7 +153,10 @@ export function SongCard({
                     </button>
                     <button
                       onClick={() => {
-                        if (pasteText.trim()) onPasteLyrics(pasteText.trim());
+                        if (!pasteText.trim()) return;
+                        onPasteLyrics(pasteText.trim());
+                        setShowPaste(false);
+                        setPasteText("");
                       }}
                       disabled={!pasteText.trim()}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
@@ -169,8 +174,8 @@ export function SongCard({
                     </button>
                   </div>
                   <p className="text-[11px] text-white/30 leading-relaxed">
-                    Auto-format removes common headers/metadata, chord-only
-                    lines, and tries to infer Chorus from repeated lines.
+                    Auto-format is best-effort. It may misidentify Chorus/Bridge
+                    or miss section breaks — review and edit labels as needed.
                   </p>
                 </div>
               )}

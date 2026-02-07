@@ -7,11 +7,6 @@ const SLIDE_W = 13.333;
 const SLIDE_H = 7.5;
 const MARGIN = 1.0;
 
-function transparencyFromOpacity(opacity: number): number {
-  const clamped = Math.min(1, Math.max(0, opacity));
-  return Math.round((1 - clamped) * 100);
-}
-
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const cleaned = hex.replace("#", "");
   const value = cleaned.length === 3
@@ -174,30 +169,15 @@ export async function buildPptx(
         break;
 
       case "lyrics": {
-        const panelX = MARGIN;
-        const panelY = MARGIN * 0.9;
-        const panelW = SLIDE_W - MARGIN * 2;
-        const panelH = SLIDE_H - MARGIN * 1.8;
-
-        slide.addShape("roundRect" as unknown as PptxGenJS.ShapeType, {
-          x: panelX,
-          y: panelY,
-          w: panelW,
-          h: panelH,
-          fill: {
-            color: theme.overlayColor,
-            transparency: transparencyFromOpacity(theme.overlayOpacity),
-          },
-          line: { color: theme.overlayColor, transparency: 80 },
-        });
-
-        let yOffset = panelY + 0.25;
+        const x = MARGIN;
+        const w = SLIDE_W - MARGIN * 2;
+        let y = MARGIN;
 
         if (sc.sectionLabel) {
           slide.addText(sc.sectionLabel, {
-            x: panelX,
-            y: yOffset,
-            w: panelW,
+            x,
+            y,
+            w,
             h: 0.4,
             fontSize: 14,
             fontFace: theme.fontFace,
@@ -206,15 +186,15 @@ export async function buildPptx(
             italic: true,
             margin: 0,
           });
-          yOffset += 0.55;
+          y += 0.55;
         }
 
         const lyricsText = (sc.lines ?? []).join("\n");
         slide.addText(lyricsText, {
-          x: panelX,
-          y: yOffset,
-          w: panelW,
-          h: panelY + panelH - yOffset - 0.25,
+          x,
+          y,
+          w,
+          h: SLIDE_H - y - MARGIN,
           fontSize: lyricsFontSize(theme.lyricsFontSize, settings.linesPerSlide),
           fontFace: theme.fontFace,
           color: theme.textColor,
@@ -222,6 +202,14 @@ export async function buildPptx(
           valign: "middle",
           lineSpacingMultiple: 1.3,
           margin: 0,
+          shadow: {
+            type: "outer",
+            color: "000000",
+            opacity: 0.45,
+            blur: 6,
+            offset: 2,
+            angle: 90,
+          },
         });
         break;
       }
